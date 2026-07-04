@@ -1,4 +1,4 @@
-# ReefDex 🦈
+# Fish Catcher 🎣
 
 A Pokémon-Go-style collection app for real marine life around **Sharm el Sheikh** — Ras
 Mohammed, the Straits of Tiran, and the local reefs. Browse a "dex" of real Red Sea species

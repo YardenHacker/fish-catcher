@@ -24,7 +24,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function fromINaturalist(sciName) {
   const url = `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciName)}&rank=species&per_page=1`
-  const res = await fetch(url, { headers: { 'User-Agent': 'ReefDex/1.0 (seed pipeline)' } })
+  const res = await fetch(url, { headers: { 'User-Agent': 'FishCatcher/1.0 (seed pipeline)' } })
   if (!res.ok) return null
   const data = await res.json()
   const taxon = data.results?.[0]
@@ -41,7 +41,7 @@ async function fromINaturalist(sciName) {
 async function fromWikimedia(sciName) {
   // Grab the lead image of the species' Wikipedia page (Commons-hosted, CC/PD).
   const api = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=original&titles=${encodeURIComponent(sciName)}&origin=*`
-  const res = await fetch(api, { headers: { 'User-Agent': 'ReefDex/1.0' } })
+  const res = await fetch(api, { headers: { 'User-Agent': 'FishCatcher/1.0'} })
   if (!res.ok) return null
   const data = await res.json()
   const pages = data.query?.pages || {}
