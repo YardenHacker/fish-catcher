@@ -30,7 +30,7 @@ async function mirror(fn: () => Promise<unknown>) {
   try {
     await fn();
   } catch (err) {
-    console.warn('ReefDex: Supabase mirror failed (kept locally)', err);
+    console.warn('Fish Catcher: Supabase mirror failed (kept locally)', err);
   }
 }
 

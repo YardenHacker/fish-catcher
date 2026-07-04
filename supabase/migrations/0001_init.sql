@@ -1,4 +1,4 @@
--- ReefDex schema: shared content (public read) + per-user data (RLS)
+-- Fish Catcher schema: shared content (public read) + per-user data (RLS)
 create extension if not exists "pgcrypto";
 
 -- ---------- Shared content ----------

@@ -1,4 +1,4 @@
-# ReefDex — Execution Brief (for Sonnet)
+# Fish Catcher — Execution Brief (for Sonnet)
 
 Opus did the planning + scaffolding. You (Sonnet) execute the build. Work through the
 branches in order, committing per feature, and verify with the preview tools.

@@ -5,7 +5,7 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
- * ReefDex runs fully offline on bundled mock data + on-device storage until a
+ * Fish Catcher runs fully offline on bundled mock data + on-device storage until a
  * free Supabase project is wired up. `isSupabaseConfigured` is the single
  * switch the data layer checks to decide mock vs. live queries.
  */

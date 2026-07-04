@@ -12,7 +12,7 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <View style={styles.identity}>
-            <ThemedText type="title">ReefDex</ThemedText>
+            <ThemedText type="title">Fish Catcher</ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
               Your dive companion for Sharm el Sheikh, Ras Mohammed & the Straits of Tiran.
             </ThemedText>
@@ -27,7 +27,7 @@ export default function ProfileScreen() {
             <ThemedText type="smallBold">About</ThemedText>
             <ThemedView type="backgroundElement" style={styles.aboutCard}>
               <ThemedText type="default" themeColor="textSecondary">
-                ReefDex catalogs real marine species found around Sharm el Sheikh dive sites, including Ras
+                Fish Catcher catalogs real marine species found around Sharm el Sheikh dive sites, including Ras
                 Mohammed, the Straits of Tiran, and the local house reefs. Mark species as found as you spot
                 them, upload your own photos to build a personal gallery, and rate and annotate the dive
                 sites you explore.
