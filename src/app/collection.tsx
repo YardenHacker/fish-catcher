@@ -1,25 +1,189 @@
-import { StyleSheet } from 'react-native';
+import { useMemo } from 'react';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useFinds, useSpeciesList, RARITY_TIER_COLOR, RARITY_TIER_ORDER } from '@/lib/data';
+import type { RarityTier, Species } from '@/lib/data';
 
-// Filled in by feat/collection: found-species list + collection score/stats.
+type FoundSpecies = Species & { firstFoundAt: string };
+
 export default function CollectionScreen() {
+  const { data: species, isLoading: speciesLoading } = useSpeciesList();
+  const { data: finds, isLoading: findsLoading } = useFinds();
+
+  const isLoading = speciesLoading || findsLoading;
+
+  const found: FoundSpecies[] = useMemo(() => {
+    if (!species || !finds) return [];
+    const speciesById = new Map(species.map((s) => [s.id, s]));
+    const rows: FoundSpecies[] = [];
+    for (const find of finds) {
+      const match = speciesById.get(find.speciesId);
+      if (match) {
+        rows.push({ ...match, firstFoundAt: find.firstFoundAt });
+      }
+    }
+    return rows.sort((a, b) => new Date(b.firstFoundAt).getTime() - new Date(a.firstFoundAt).getTime());
+  }, [species, finds]);
+
+  const collectionScore = useMemo(() => found.reduce((sum, s) => sum + s.rarityScore, 0), [found]);
+
+  const tierCounts = useMemo(() => {
+    const counts: Record<RarityTier, number> = {
+      Common: 0,
+      Uncommon: 0,
+      Rare: 0,
+      Epic: 0,
+      Legendary: 0,
+    };
+    for (const s of found) {
+      counts[s.rarityTier] += 1;
+    }
+    return counts;
+  }, [found]);
+
+  const totalCount = species?.length ?? 0;
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="title">My Collection</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Coming soon
-        </ThemedText>
+        <View style={styles.content}>
+          <ThemedText type="title">My Collection</ThemedText>
+
+          {isLoading ? (
+            <ThemedText type="default" themeColor="textSecondary" style={styles.loading}>
+              Loading your collection...
+            </ThemedText>
+          ) : (
+            <>
+              <ThemedView type="backgroundElement" style={styles.statsCard}>
+                <ThemedText type="subtitle">
+                  Found {found.length}/{totalCount}
+                </ThemedText>
+                <ThemedText type="default" themeColor="textSecondary">
+                  Collection score: {collectionScore}
+                </ThemedText>
+
+                <View style={styles.tierRow}>
+                  {RARITY_TIER_ORDER.map((tier) => (
+                    <View key={tier} style={styles.tierChip}>
+                      <View style={[styles.tierDot, { backgroundColor: RARITY_TIER_COLOR[tier] }]} />
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {tier} {tierCounts[tier]}
+                      </ThemedText>
+                    </View>
+                  ))}
+                </View>
+              </ThemedView>
+
+              {found.length === 0 ? (
+                <ThemedView type="backgroundElement" style={styles.emptyState}>
+                  <ThemedText type="default" themeColor="textSecondary" style={styles.emptyText}>
+                    No finds yet — head to the Dex and start exploring the reefs of Sharm el Sheikh!
+                  </ThemedText>
+                </ThemedView>
+              ) : (
+                <FlatList
+                  data={found}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={styles.listContent}
+                  renderItem={({ item }) => <FoundRow species={item} />}
+                />
+              )}
+            </>
+          )}
+        </View>
       </SafeAreaView>
     </ThemedView>
   );
 }
 
+function FoundRow({ species }: { species: FoundSpecies }) {
+  return (
+    <Link href={`/creature/${species.slug}`} asChild>
+      <Pressable>
+        <ThemedView type="backgroundElement" style={styles.row}>
+          <View style={styles.rowMain}>
+            <View style={[styles.tierDot, { backgroundColor: RARITY_TIER_COLOR[species.rarityTier] }]} />
+            <View style={styles.rowText}>
+              <ThemedText type="smallBold">{species.commonName}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {species.rarityTier}
+              </ThemedText>
+            </View>
+          </View>
+          <ThemedText type="small" themeColor="textSecondary">
+            {new Date(species.firstFoundAt).toLocaleDateString()}
+          </ThemedText>
+        </ThemedView>
+      </Pressable>
+    </Link>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  safeArea: { flex: 1, padding: Spacing.four, gap: Spacing.two },
+  safeArea: { flex: 1, alignItems: 'center' },
+  content: {
+    flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+    gap: Spacing.three,
+  },
+  loading: { paddingTop: Spacing.three },
+  statsCard: {
+    borderRadius: Spacing.four,
+    padding: Spacing.three,
+    gap: Spacing.one,
+  },
+  tierRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+  },
+  tierChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  tierDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  emptyState: {
+    borderRadius: Spacing.four,
+    padding: Spacing.four,
+  },
+  emptyText: {
+    textAlign: 'center',
+  },
+  listContent: {
+    gap: Spacing.two,
+    paddingBottom: BottomTabInset + Spacing.three,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+  },
+  rowMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flexShrink: 1,
+  },
+  rowText: {
+    gap: Spacing.half,
+    flexShrink: 1,
+  },
 });
