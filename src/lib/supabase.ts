@@ -11,10 +11,22 @@ const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
  */
 export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
+// AsyncStorage's web implementation touches `window` directly. Expo Router
+// server-renders the web app's initial HTML in a Node worker (no `window`),
+// and the Supabase auth client calls into storage as soon as it's
+// constructed -- so an unguarded AsyncStorage crashes every server-rendered
+// request. Route storage calls through this no-op-on-the-server shim instead.
+const ssrSafeStorage = {
+  getItem: (key: string) => (typeof window === 'undefined' ? Promise.resolve(null) : AsyncStorage.getItem(key)),
+  setItem: (key: string, value: string) =>
+    typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.setItem(key, value),
+  removeItem: (key: string) => (typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.removeItem(key)),
+};
+
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       auth: {
-        storage: AsyncStorage,
+        storage: ssrSafeStorage,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
