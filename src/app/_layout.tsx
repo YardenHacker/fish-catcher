@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -16,13 +15,24 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function TabLayout() {
+export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AnimatedSplashOverlay />
-        <AppTabs />
+        {/*
+          The (tabs) group owns the custom Tabs/TabSlot UI, which only knows
+          how to render its own declared tab routes. Creature/site detail are
+          shared screens outside the tab set, so they're pushed on top of the
+          tabs as ordinary Stack screens (the standard expo-router pattern for
+          "tabs + shared detail screens").
+        */}
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="creature/[slug]" options={{ title: 'Creature' }} />
+          <Stack.Screen name="site/[slug]" options={{ title: 'Dive Site' }} />
+        </Stack>
       </ThemeProvider>
     </QueryClientProvider>
   );
