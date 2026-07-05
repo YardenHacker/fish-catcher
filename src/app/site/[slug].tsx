@@ -1,3 +1,5 @@
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -7,7 +9,15 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { RARITY_TIER_COLOR, useRateSite, useSite, useSiteRating, useSpeciesForSite } from '@/lib/data';
+import {
+  RARITY_TIER_COLOR,
+  useAddUserPhoto,
+  useRateSite,
+  useSite,
+  useSiteRating,
+  useSpeciesForSite,
+  useUserPhotos,
+} from '@/lib/data';
 import type { Species } from '@/lib/data';
 
 function Badge({ label }: { label: string }) {
@@ -57,10 +67,13 @@ export default function SiteDetailScreen() {
   const { data: species, isLoading: isSpeciesLoading } = useSpeciesForSite(slug);
   const { data: existingRating } = useSiteRating(site?.id);
   const rateSite = useRateSite();
+  const { data: userPhotos } = useUserPhotos({ siteId: site?.id });
+  const addUserPhoto = useAddUserPhoto();
 
   const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState('');
   const [justSaved, setJustSaved] = useState(false);
+  const [pickerMessage, setPickerMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (existingRating) {
@@ -110,6 +123,20 @@ export default function SiteDetailScreen() {
     );
   }
 
+  async function handleAddPhoto() {
+    if (!site) return;
+    setPickerMessage(null);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setPickerMessage('Photo library permission was denied.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) {
+      addUserPhoto.mutate({ siteId: site.id, uri: result.assets[0].uri });
+    }
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -150,6 +177,35 @@ export default function SiteDetailScreen() {
                   <SpeciesRow key={s.id} species={s} />
                 ))}
               </View>
+            )}
+
+            <ThemedText type="subtitle" style={styles.sectionHeader}>
+              Photos
+            </ThemedText>
+            {userPhotos && userPhotos.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.photoRow}>
+                  {userPhotos.map((photo) => (
+                    <Image key={photo.id} source={{ uri: photo.uri }} style={styles.thumbnail} contentFit="cover" />
+                  ))}
+                </View>
+              </ScrollView>
+            ) : (
+              <ThemedText type="small" themeColor="textSecondary">
+                No photos yet.
+              </ThemedText>
+            )}
+            <Pressable
+              onPress={handleAddPhoto}
+              style={[styles.addPhotoButton, { backgroundColor: theme.accent }]}>
+              <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
+                Add photo
+              </ThemedText>
+            </Pressable>
+            {pickerMessage && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {pickerMessage}
+              </ThemedText>
             )}
 
             <ThemedText type="subtitle" style={styles.sectionHeader}>
@@ -240,6 +296,21 @@ const styles = StyleSheet.create({
   },
   rowPressed: {
     opacity: 0.6,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  thumbnail: {
+    width: 100,
+    height: 100,
+    borderRadius: Spacing.two,
+  },
+  addPhotoButton: {
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    alignSelf: 'flex-start',
   },
   starRow: {
     flexDirection: 'row',
