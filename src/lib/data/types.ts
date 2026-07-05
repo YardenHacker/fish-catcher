@@ -17,6 +17,10 @@ export interface Species {
   photoCredit?: string;
   photoLicense?: string;
   photoSourceUrl?: string;
+  /** Honest population/range context -- not a precise "world count", which doesn't exist for most reef fish. */
+  populationInfo?: string;
+  /** Only set when genuinely seasonal (e.g. "Summer (June–August)"); absent for year-round residents. */
+  bestSeason?: string;
 }
 
 export interface DiveSite {

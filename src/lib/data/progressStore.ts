@@ -76,6 +76,68 @@ export async function getSightingsForSpecies(speciesId: string): Promise<Sightin
     .map(({ speciesId: sId, siteId, count, updatedAt }) => ({ speciesId: sId, siteId, count, updatedAt }));
 }
 
+/** The flip side of getSightingsForSpecies: every species the user has personally logged at one site. */
+export async function getSightingsForSite(siteId: string): Promise<Sighting[]> {
+  const userId = await getUserId();
+  if (userId && supabase) {
+    const { data, error } = await supabase
+      .from('sightings')
+      .select('species_id, site_id, count, updated_at')
+      .eq('user_id', userId)
+      .eq('site_id', siteId);
+    if (error) throw error;
+    return (data ?? []).map((row: any) => ({
+      speciesId: row.species_id,
+      siteId: row.site_id,
+      count: row.count,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  const all = await readJson<LocalSighting[]>(KEYS.sightings, []);
+  return all
+    .filter((s) => s.siteId === siteId)
+    .map(({ speciesId, siteId: sId, count, updatedAt }) => ({ speciesId, siteId: sId, count, updatedAt }));
+}
+
+/**
+ * Bulk "I saw this everywhere in this area" action: ensures every listed site
+ * has at least count=1 for this species, without touching sites that already
+ * have a (possibly higher) count recorded.
+ */
+export async function markAllSightingsForSites(speciesId: string, siteIds: string[]): Promise<void> {
+  const userId = await getUserId();
+  const now = new Date().toISOString();
+
+  if (userId && supabase) {
+    const { data: existing, error: existingError } = await supabase
+      .from('sightings')
+      .select('site_id')
+      .eq('user_id', userId)
+      .eq('species_id', speciesId)
+      .in('site_id', siteIds);
+    if (existingError) throw existingError;
+
+    const already = new Set((existing ?? []).map((row: any) => row.site_id));
+    const toInsert = siteIds
+      .filter((siteId) => !already.has(siteId))
+      .map((siteId) => ({ user_id: userId, species_id: speciesId, site_id: siteId, count: 1, updated_at: now }));
+    if (toInsert.length === 0) return;
+
+    const { error } = await supabase.from('sightings').insert(toInsert);
+    if (error) throw error;
+    return;
+  }
+
+  const all = await readJson<LocalSighting[]>(KEYS.sightings, []);
+  const already = new Set(all.filter((s) => s.speciesId === speciesId).map((s) => s.siteId));
+  const additions: LocalSighting[] = siteIds
+    .filter((siteId) => !already.has(siteId))
+    .map((siteId) => ({ speciesId, siteId, count: 1, createdAt: now, updatedAt: now }));
+  if (additions.length === 0) return;
+  await writeJson(KEYS.sightings, [...all, ...additions]);
+}
+
 export async function setSightingCount(speciesId: string, siteId: string, count: number): Promise<void> {
   const userId = await getUserId();
   const now = new Date().toISOString();

@@ -21,6 +21,8 @@ function mapSpeciesRow(row: any): Species {
     photoCredit: row.photo_credit ?? undefined,
     photoLicense: row.photo_license ?? undefined,
     photoSourceUrl: row.photo_source_url ?? undefined,
+    populationInfo: row.population_info ?? undefined,
+    bestSeason: row.best_season ?? undefined,
   };
 }
 

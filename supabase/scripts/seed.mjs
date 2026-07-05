@@ -76,6 +76,8 @@ async function main() {
           depth_range: sp.depth_range,
           iucn_status: sp.iucn_status,
           rarity_tier: sp.rarity_tier,
+          population_info: sp.population_info ?? null,
+          best_season: sp.best_season ?? null,
         },
         { onConflict: 'slug' },
       )
