@@ -139,8 +139,11 @@ export default function MapScreen() {
         <View style={styles.mapContainer}>
           <leaflet.MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} style={styles.map}>
             <leaflet.TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              subdomains="abcd"
+              maxZoom={20}
+              detectRetina
             />
 
             {(sites ?? []).map((site) => (
