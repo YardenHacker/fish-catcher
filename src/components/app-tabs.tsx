@@ -22,6 +22,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="map" md="map" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="map">
+        <NativeTabs.Trigger.Label>Map</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="map.fill" md="map" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="collection">
         <NativeTabs.Trigger.Label>Collection</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="star.fill" md="star" />

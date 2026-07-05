@@ -19,6 +19,9 @@ export default function AppTabs() {
           <TabTrigger name="sites" href="/sites" asChild>
             <TabButton icon="🗺️">Sites</TabButton>
           </TabTrigger>
+          <TabTrigger name="map" href="/map" asChild>
+            <TabButton icon="📍">Map</TabButton>
+          </TabTrigger>
           <TabTrigger name="collection" href="/collection" asChild>
             <TabButton icon="⭐">Collection</TabButton>
           </TabTrigger>
