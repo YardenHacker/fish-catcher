@@ -1,11 +1,11 @@
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AppTabs() {
   return (
@@ -14,16 +14,16 @@ export default function AppTabs() {
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="dex" href="/" asChild>
-            <TabButton icon="water.waves">Dex</TabButton>
+            <TabButton icon="🐠">Dex</TabButton>
           </TabTrigger>
           <TabTrigger name="sites" href="/sites" asChild>
-            <TabButton icon="map">Sites</TabButton>
+            <TabButton icon="🗺️">Sites</TabButton>
           </TabTrigger>
           <TabTrigger name="collection" href="/collection" asChild>
-            <TabButton icon="star.fill">Collection</TabButton>
+            <TabButton icon="⭐">Collection</TabButton>
           </TabTrigger>
           <TabTrigger name="profile" href="/profile" asChild>
-            <TabButton icon="person.fill">Profile</TabButton>
+            <TabButton icon="👤">Profile</TabButton>
           </TabTrigger>
         </CustomTabList>
       </TabList>
@@ -31,82 +31,59 @@ export default function AppTabs() {
   );
 }
 
-type TabIconName = 'water.waves' | 'map' | 'star.fill' | 'person.fill';
-
-export function TabButton({
-  children,
-  isFocused,
-  icon,
-  ...props
-}: TabTriggerSlotProps & { icon?: TabIconName }) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
+// SF Symbols don't have a meaningful web equivalent (the web fallback renders
+// a plain circle glyph), so plain emoji are used here instead -- they render
+// identically everywhere with no icon library needed.
+export function TabButton({ children, isFocused, icon, ...props }: TabTriggerSlotProps & { icon?: string }) {
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        {icon && (
-          <SymbolView
-            tintColor={isFocused ? colors.text : colors.textSecondary}
-            name={{ ios: icon, web: 'circle' }}
-            size={14}
-          />
-        )}
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
-          {children}
-        </ThemedText>
-      </ThemedView>
+    <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
+      <Text style={styles.tabIcon}>{icon}</Text>
+      <ThemedText type="small" themeColor={isFocused ? 'accent' : 'textSecondary'} style={isFocused && styles.focusedLabel}>
+        {children}
+      </ThemedText>
     </Pressable>
   );
 }
 
 export function CustomTabList(props: TabListProps) {
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          🎣 Fish Catcher
-        </ThemedText>
-
-        {props.children}
-      </ThemedView>
-    </View>
+    <ThemedView type="backgroundElement" style={styles.barShadowWrap}>
+      <SafeAreaView edges={['bottom']}>
+        <ThemedView {...props} type="backgroundElement" style={styles.tabBar} />
+      </SafeAreaView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  tabListContainer: {
+  barShadowWrap: {
     position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    alignSelf: 'center',
     width: '100%',
-    padding: Spacing.three,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-  },
-  innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
-    borderRadius: Spacing.five,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.two,
     maxWidth: MaxContentWidth,
+    paddingVertical: Spacing.two,
   },
-  brandText: {
-    marginRight: 'auto',
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.half,
+    paddingVertical: Spacing.one,
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
-  tabButtonView: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+  tabIcon: {
+    fontSize: 22,
+  },
+  focusedLabel: {
+    fontWeight: '700',
   },
 });

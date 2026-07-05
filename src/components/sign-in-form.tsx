@@ -60,8 +60,11 @@ export function SignInForm() {
             value={email}
             onChangeText={setEmail}
           />
-          <Pressable style={styles.primaryButton} onPress={handleSendCode} disabled={isBusy}>
-            <ThemedText type="smallBold" style={styles.primaryButtonText}>
+          <Pressable
+            style={[styles.primaryButton, { backgroundColor: theme.accent }]}
+            onPress={handleSendCode}
+            disabled={isBusy}>
+            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
               {isBusy ? 'Sending…' : 'Send code'}
             </ThemedText>
           </Pressable>
@@ -76,8 +79,11 @@ export function SignInForm() {
             value={code}
             onChangeText={setCode}
           />
-          <Pressable style={styles.primaryButton} onPress={handleVerifyCode} disabled={isBusy}>
-            <ThemedText type="smallBold" style={styles.primaryButtonText}>
+          <Pressable
+            style={[styles.primaryButton, { backgroundColor: theme.accent }]}
+            onPress={handleVerifyCode}
+            disabled={isBusy}>
+            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
               {isBusy ? 'Verifying…' : 'Verify & sign in'}
             </ThemedText>
           </Pressable>
@@ -111,12 +117,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   primaryButton: {
-    backgroundColor: '#2E7DD1',
     borderRadius: Spacing.two,
     paddingVertical: Spacing.two,
     alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#ffffff',
   },
 });
