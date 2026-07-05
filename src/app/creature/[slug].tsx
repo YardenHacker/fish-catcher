@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CollapsiblePicker, ToggleRow } from '@/components/collapsible-picker';
 import { ExternalLink } from '@/components/external-link';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -31,68 +32,20 @@ const CHANCE_TO_SEE_LABEL: Record<RarityTier, string> = {
   Legendary: 'Rare, lucky encounter',
 };
 
-function SightingRow({
-  site,
-  count,
-  onChange,
-}: {
-  site: DiveSite;
-  count: number;
-  onChange: (next: number) => void;
-}) {
-  const theme = useTheme();
-  const isLogged = count > 0;
-
-  return (
-    <ThemedView
-      type="backgroundElement"
-      style={[
-        styles.sightingRow,
-        isLogged && {
-          backgroundColor: theme.backgroundSelected,
-          borderColor: theme.accent,
-          borderWidth: 1,
-        },
-      ]}>
-      <ThemedText type="default" style={styles.sightingSiteName}>
-        {site.name}
-      </ThemedText>
-      <View style={styles.stepper}>
-        <Pressable
-          onPress={() => onChange(Math.max(0, count - 1))}
-          disabled={count <= 0}
-          style={[styles.stepperButton, { backgroundColor: theme.accent, opacity: count <= 0 ? 0.4 : 1 }]}>
-          <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
-            −
-          </ThemedText>
-        </Pressable>
-        <ThemedText type="smallBold" style={styles.stepperCount}>
-          {count}
-        </ThemedText>
-        <Pressable
-          onPress={() => onChange(count + 1)}
-          style={[styles.stepperButton, { backgroundColor: theme.accent }]}>
-          <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
-            +
-          </ThemedText>
-        </Pressable>
-      </View>
-    </ThemedView>
-  );
-}
-
 function AreaGroup({
   area,
   sites,
   sightingsBySite,
-  onChangeSite,
+  onToggleSite,
+  onAddPhotoForSite,
   onMarkAllSeen,
   isMarkingAll,
 }: {
   area: string;
   sites: DiveSite[];
   sightingsBySite: Map<string, Sighting>;
-  onChangeSite: (siteId: string, next: number) => void;
+  onToggleSite: (siteId: string, checked: boolean) => void;
+  onAddPhotoForSite: (siteId: string) => void;
   onMarkAllSeen: () => void;
   isMarkingAll: boolean;
 }) {
@@ -114,15 +67,24 @@ function AreaGroup({
           </ThemedText>
         </Pressable>
       </View>
-      <View style={styles.siteList}>
-        {sites.map((site) => (
-          <SightingRow
-            key={site.id}
-            site={site}
-            count={sightingsBySite.get(site.id)?.count ?? 0}
-            onChange={(next) => onChangeSite(site.id, next)}
-          />
-        ))}
+      <View>
+        {sites.map((site) => {
+          const checked = (sightingsBySite.get(site.id)?.count ?? 0) > 0;
+          return (
+            <View key={site.id}>
+              <ToggleRow checked={checked} onToggle={() => onToggleSite(site.id, !checked)}>
+                <ThemedText type="default">{site.name}</ThemedText>
+              </ToggleRow>
+              {checked && (
+                <Pressable onPress={() => onAddPhotoForSite(site.id)} style={styles.inlineAddPhoto}>
+                  <ThemedText type="small" themeColor="accent">
+                    + Add photo from {site.name}
+                  </ThemedText>
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -186,7 +148,18 @@ export default function CreatureDetailScreen() {
     [catalogSites],
   );
 
-  async function handleAddPhoto() {
+  const siteNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const site of allSites ?? []) map.set(site.id, site.name);
+    return map;
+  }, [allSites]);
+
+  const seenSiteCount = useMemo(
+    () => new Set((sightings ?? []).filter((s) => s.count > 0).map((s) => s.siteId)).size,
+    [sightings],
+  );
+
+  async function pickAndUploadPhoto(siteId?: string) {
     if (!species) return;
     setPickerMessage(null);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -196,7 +169,7 @@ export default function CreatureDetailScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
-      addUserPhoto.mutate({ speciesId: species.id, uri: result.assets[0].uri });
+      addUserPhoto.mutate({ speciesId: species.id, siteId, uri: result.assets[0].uri });
     }
   }
 
@@ -275,9 +248,9 @@ export default function CreatureDetailScreen() {
 
           <View style={styles.section}>
             <ThemedView type="backgroundElement" style={styles.totalSeenBlock}>
-              {totalSeen > 0 ? (
+              {seenSiteCount > 0 ? (
                 <ThemedText type="smallBold" style={{ color: theme.accent }}>
-                  Total seen: {totalSeen}
+                  Seen at {seenSiteCount} {seenSiteCount === 1 ? 'site' : 'sites'}
                 </ThemedText>
               ) : (
                 <ThemedText type="small" themeColor="textSecondary">
@@ -290,16 +263,22 @@ export default function CreatureDetailScreen() {
               Seen at
             </ThemedText>
             {sitesByArea.length > 0 ? (
-              <View style={styles.siteList}>
+              <CollapsiblePicker
+                summary={
+                  seenSiteCount > 0
+                    ? `Seen at ${seenSiteCount} of ${allSites?.length ?? 0} sites`
+                    : `Not seen anywhere yet — tap to log a sighting`
+                }>
                 {sitesByArea.map(([area, areaSites]) => (
                   <AreaGroup
                     key={area}
                     area={area}
                     sites={areaSites}
                     sightingsBySite={sightingsBySite}
-                    onChangeSite={(siteId, next) =>
-                      setSightingCount.mutate({ speciesId: species.id, siteId, count: next })
+                    onToggleSite={(siteId, checked) =>
+                      setSightingCount.mutate({ speciesId: species.id, siteId, count: checked ? 1 : 0 })
                     }
+                    onAddPhotoForSite={(siteId) => pickAndUploadPhoto(siteId)}
                     onMarkAllSeen={() =>
                       markAllSightingsForSites.mutate({
                         speciesId: species.id,
@@ -309,7 +288,7 @@ export default function CreatureDetailScreen() {
                     isMarkingAll={markAllSightingsForSites.isPending}
                   />
                 ))}
-              </View>
+              </CollapsiblePicker>
             ) : (
               <ThemedText type="small" themeColor="textSecondary">
                 No known sites yet.
@@ -341,7 +320,12 @@ export default function CreatureDetailScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.photoRow}>
                   {userPhotos.map((photo) => (
-                    <Image key={photo.id} source={{ uri: photo.uri }} style={styles.thumbnail} contentFit="cover" />
+                    <View key={photo.id} style={styles.photoWithCaption}>
+                      <Image source={{ uri: photo.uri }} style={styles.thumbnail} contentFit="cover" />
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {photo.siteId ? (siteNameById.get(photo.siteId) ?? 'Dive site') : 'General'}
+                      </ThemedText>
+                    </View>
                   ))}
                 </View>
               </ScrollView>
@@ -351,7 +335,7 @@ export default function CreatureDetailScreen() {
               </ThemedText>
             )}
             <Pressable
-              onPress={handleAddPhoto}
+              onPress={() => pickAndUploadPhoto()}
               style={[styles.addPhotoButton, { borderColor: theme.textSecondary }]}>
               <ThemedText type="smallBold">Add your photo</ThemedText>
             </Pressable>
@@ -416,25 +400,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     borderRadius: Spacing.four,
   },
-  sightingRow: {
-    borderRadius: Spacing.two,
-    padding: Spacing.three,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-  },
-  sightingSiteName: { flex: 1 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  stepperButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperCount: { minWidth: 24, textAlign: 'center' },
+  inlineAddPhoto: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.two },
   photoRow: { flexDirection: 'row', gap: Spacing.two },
+  photoWithCaption: { gap: Spacing.half, alignItems: 'center' },
   thumbnail: { width: 100, height: 100, borderRadius: Spacing.two },
   addPhotoButton: {
     borderRadius: Spacing.two,

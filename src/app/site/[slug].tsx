@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CollapsiblePicker, ToggleRow } from '@/components/collapsible-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -36,72 +37,61 @@ function Badge({ label }: { label: string }) {
  * One row per species, always shown (not just already-logged ones) so this
  * doubles as both the "what have I seen here" view and the way to mark a new
  * sighting -- any fish can turn up at any site, not just a curated subset.
+ * Photos are scoped to (species, this site) so the same fish spotted at a
+ * different site can carry different photos.
  */
 function SiteSpeciesRow({
   species,
-  count,
-  onChange,
+  siteId,
+  checked,
+  onToggle,
+  onAddPhoto,
 }: {
   species: Species;
-  count: number;
-  onChange: (next: number) => void;
+  siteId: string;
+  checked: boolean;
+  onToggle: () => void;
+  onAddPhoto: () => void;
 }) {
-  const theme = useTheme();
-  const isLogged = count > 0;
-  // Only fetch photos for species actually logged here -- avoids firing a
-  // photos query for all 45 species when most have zero sightings at this site.
-  const { data: photos } = useUserPhotos({ speciesId: isLogged ? species.id : undefined });
+  const { data: photos } = useUserPhotos({
+    speciesId: checked ? species.id : undefined,
+    siteId: checked ? siteId : undefined,
+  });
 
   return (
     <View style={styles.sightedSpeciesBlock}>
-      <ThemedView
-        type="backgroundElement"
-        style={[
-          styles.speciesRow,
-          isLogged && { backgroundColor: theme.backgroundSelected, borderColor: theme.accent, borderWidth: 1 },
-        ]}>
+      <ToggleRow
+        checked={checked}
+        onToggle={onToggle}
+        leading={<View style={[styles.rarityDot, { backgroundColor: RARITY_TIER_COLOR[species.rarityTier] }]} />}>
         <Link href={`/creature/${species.slug}`} asChild>
-          <Pressable style={styles.speciesRowLink}>
-            <View style={[styles.rarityDot, { backgroundColor: RARITY_TIER_COLOR[species.rarityTier] }]} />
-            <ThemedText type="default" style={styles.speciesName}>
-              {species.commonName}
-            </ThemedText>
+          <Pressable>
+            <ThemedText type="default">{species.commonName}</ThemedText>
           </Pressable>
         </Link>
-        <View style={styles.stepper}>
-          <Pressable
-            onPress={() => onChange(Math.max(0, count - 1))}
-            disabled={count <= 0}
-            style={[styles.stepperButton, { backgroundColor: theme.accent, opacity: count <= 0 ? 0.4 : 1 }]}>
-            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
-              −
+      </ToggleRow>
+      {checked && (
+        <>
+          <Pressable onPress={onAddPhoto} style={styles.inlineAddPhoto}>
+            <ThemedText type="small" themeColor="accent">
+              + Add photo from here
             </ThemedText>
           </Pressable>
-          <ThemedText type="smallBold" style={styles.stepperCount}>
-            {count}
-          </ThemedText>
-          <Pressable
-            onPress={() => onChange(count + 1)}
-            style={[styles.stepperButton, { backgroundColor: theme.accent }]}>
-            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
-              +
-            </ThemedText>
-          </Pressable>
-        </View>
-      </ThemedView>
-      {isLogged && photos && photos.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.photoRow}>
-            {photos.map((photo) => (
-              <Image
-                key={photo.id}
-                source={{ uri: photo.uri }}
-                style={styles.sightedThumbnail}
-                contentFit="cover"
-              />
-            ))}
-          </View>
-        </ScrollView>
+          {photos && photos.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.photoRow}>
+                {photos.map((photo) => (
+                  <Image
+                    key={photo.id}
+                    source={{ uri: photo.uri }}
+                    style={styles.sightedThumbnail}
+                    contentFit="cover"
+                  />
+                ))}
+              </View>
+            </ScrollView>
+          )}
+        </>
       )}
     </View>
   );
@@ -145,6 +135,11 @@ export default function SiteDetailScreen() {
   }, [speciesList, sightings]);
 
   const isFishListLoading = isSpeciesLoading || isSightingsLoading;
+
+  const seenSpeciesCount = useMemo(
+    () => speciesWithCounts.filter(({ count }) => count > 0).length,
+    [speciesWithCounts],
+  );
 
   const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState('');
@@ -199,7 +194,7 @@ export default function SiteDetailScreen() {
     );
   }
 
-  async function handleAddPhoto() {
+  async function pickAndUploadPhoto(speciesId?: string) {
     if (!site) return;
     setPickerMessage(null);
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -209,7 +204,7 @@ export default function SiteDetailScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
-      addUserPhoto.mutate({ siteId: site.id, uri: result.assets[0].uri });
+      addUserPhoto.mutate({ siteId: site.id, speciesId, uri: result.assets[0].uri });
     }
   }
 
@@ -242,18 +237,25 @@ export default function SiteDetailScreen() {
                 Loading fish…
               </ThemedText>
             ) : (
-              <View style={styles.rowList}>
+              <CollapsiblePicker
+                summary={
+                  seenSpeciesCount > 0
+                    ? `Seen ${seenSpeciesCount} of ${speciesWithCounts.length} fish here`
+                    : 'No sightings logged yet — tap to add one'
+                }>
                 {speciesWithCounts.map(({ species: s, count }) => (
                   <SiteSpeciesRow
                     key={s.id}
                     species={s}
-                    count={count}
-                    onChange={(next) =>
-                      setSightingCount.mutate({ speciesId: s.id, siteId: site.id, count: next })
+                    siteId={site.id}
+                    checked={count > 0}
+                    onToggle={() =>
+                      setSightingCount.mutate({ speciesId: s.id, siteId: site.id, count: count > 0 ? 0 : 1 })
                     }
+                    onAddPhoto={() => pickAndUploadPhoto(s.id)}
                   />
                 ))}
-              </View>
+              </CollapsiblePicker>
             )}
 
             <ThemedText type="subtitle" style={styles.sectionHeader}>
@@ -273,7 +275,7 @@ export default function SiteDetailScreen() {
               </ThemedText>
             )}
             <Pressable
-              onPress={handleAddPhoto}
+              onPress={() => pickAndUploadPhoto()}
               style={[styles.addPhotoButton, { backgroundColor: theme.accent }]}>
               <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
                 Add photo
@@ -353,40 +355,12 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginTop: Spacing.two,
   },
-  rowList: {
-    gap: Spacing.two,
-  },
-  speciesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-    borderRadius: Spacing.two,
-    padding: Spacing.three,
-  },
-  speciesRowLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    flex: 1,
-  },
-  speciesName: {
-    flex: 1,
-  },
   rarityDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
   },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  stepperButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperCount: { minWidth: 24, textAlign: 'center' },
+  inlineAddPhoto: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.two },
   sightedSpeciesBlock: {
     gap: Spacing.one,
   },
