@@ -13,13 +13,22 @@ import { useTheme } from '@/hooks/use-theme';
 import {
   RARITY_TIER_COLOR,
   useAddUserPhoto,
+  useMarkAllSightingsForSites,
   useSetSightingCount,
   useSightingsForSpecies,
   useSitesForSpecies,
   useSpecies,
   useUserPhotos,
 } from '@/lib/data';
-import type { DiveSite, Sighting } from '@/lib/data/types';
+import type { DiveSite, RarityTier, Sighting } from '@/lib/data/types';
+
+const CHANCE_TO_SEE_LABEL: Record<RarityTier, string> = {
+  Common: 'Very likely',
+  Uncommon: 'Likely',
+  Rare: 'Possible',
+  Epic: 'Unlikely',
+  Legendary: 'Rare, lucky encounter',
+};
 
 function SightingRow({
   site,
@@ -71,6 +80,53 @@ function SightingRow({
   );
 }
 
+function AreaGroup({
+  area,
+  sites,
+  sightingsBySite,
+  onChangeSite,
+  onMarkAllSeen,
+  isMarkingAll,
+}: {
+  area: string;
+  sites: DiveSite[];
+  sightingsBySite: Map<string, Sighting>;
+  onChangeSite: (siteId: string, next: number) => void;
+  onMarkAllSeen: () => void;
+  isMarkingAll: boolean;
+}) {
+  const theme = useTheme();
+
+  return (
+    <View style={styles.areaGroup}>
+      <View style={styles.areaHeader}>
+        <ThemedText type="smallBold">{area}</ThemedText>
+        <Pressable
+          onPress={onMarkAllSeen}
+          disabled={isMarkingAll}
+          style={[
+            styles.markAllButton,
+            { backgroundColor: theme.accent, opacity: isMarkingAll ? 0.5 : 1 },
+          ]}>
+          <ThemedText type="small" style={{ color: theme.accentContrast }}>
+            Mark all seen in {area}
+          </ThemedText>
+        </Pressable>
+      </View>
+      <View style={styles.siteList}>
+        {sites.map((site) => (
+          <SightingRow
+            key={site.id}
+            site={site}
+            count={sightingsBySite.get(site.id)?.count ?? 0}
+            onChange={(next) => onChangeSite(site.id, next)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.statRow}>
@@ -92,6 +148,7 @@ export default function CreatureDetailScreen() {
   const { data: sightings } = useSightingsForSpecies(species?.id);
   const setSightingCount = useSetSightingCount();
   const addUserPhoto = useAddUserPhoto();
+  const markAllSightingsForSites = useMarkAllSightingsForSites();
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
 
   const sightingsBySite = useMemo(() => {
@@ -103,6 +160,24 @@ export default function CreatureDetailScreen() {
   const totalSeen = useMemo(
     () => (sightings ?? []).reduce((sum, s) => sum + s.count, 0),
     [sightings],
+  );
+
+  const sitesByArea = useMemo(() => {
+    const map = new Map<string, DiveSite[]>();
+    for (const site of sites ?? []) {
+      const group = map.get(site.area);
+      if (group) {
+        group.push(site);
+      } else {
+        map.set(site.area, [site]);
+      }
+    }
+    return Array.from(map.entries());
+  }, [sites]);
+
+  const bestSites = useMemo(
+    () => (sites ?? []).slice(0, 2).map((s) => s.name).join(', ') || undefined,
+    [sites],
   );
 
   async function handleAddPhoto() {
@@ -178,9 +253,19 @@ export default function CreatureDetailScreen() {
             <StatRow label="Habitat" value={species.habitat} />
             <StatRow label="Max size" value={`${species.maxSizeCm} cm`} />
             <StatRow label="Depth range" value={species.depthRange} />
+            <StatRow label="Chance to see" value={CHANCE_TO_SEE_LABEL[species.rarityTier]} />
+            {species.bestSeason && <StatRow label="Best season" value={species.bestSeason} />}
+            {bestSites && <StatRow label="Best sites" value={bestSites} />}
           </ThemedView>
 
           <ThemedText type="default">{species.description}</ThemedText>
+
+          {species.populationInfo && (
+            <View style={styles.populationBlock}>
+              <ThemedText type="smallBold">Population</ThemedText>
+              <ThemedText type="default">{species.populationInfo}</ThemedText>
+            </View>
+          )}
 
           <View style={styles.section}>
             <ThemedView type="backgroundElement" style={styles.totalSeenBlock}>
@@ -198,16 +283,24 @@ export default function CreatureDetailScreen() {
             <ThemedText type="subtitle" style={styles.sectionTitle}>
               Seen at
             </ThemedText>
-            {sites && sites.length > 0 ? (
+            {sitesByArea.length > 0 ? (
               <View style={styles.siteList}>
-                {sites.map((site) => (
-                  <SightingRow
-                    key={site.id}
-                    site={site}
-                    count={sightingsBySite.get(site.id)?.count ?? 0}
-                    onChange={(next) =>
-                      setSightingCount.mutate({ speciesId: species.id, siteId: site.id, count: next })
+                {sitesByArea.map(([area, areaSites]) => (
+                  <AreaGroup
+                    key={area}
+                    area={area}
+                    sites={areaSites}
+                    sightingsBySite={sightingsBySite}
+                    onChangeSite={(siteId, next) =>
+                      setSightingCount.mutate({ speciesId: species.id, siteId, count: next })
                     }
+                    onMarkAllSeen={() =>
+                      markAllSightingsForSites.mutate({
+                        speciesId: species.id,
+                        siteIds: areaSites.map((s) => s.id),
+                      })
+                    }
+                    isMarkingAll={markAllSightingsForSites.isPending}
                   />
                 ))}
               </View>
@@ -297,12 +390,25 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', justifyContent: 'space-between' },
   section: { gap: Spacing.two },
   sectionTitle: { fontSize: 20, lineHeight: 26 },
-  siteList: { gap: Spacing.two },
+  siteList: { gap: Spacing.three },
   attribution: {},
   totalSeenBlock: {
     borderRadius: Spacing.two,
     padding: Spacing.three,
     alignItems: 'center',
+  },
+  populationBlock: { gap: Spacing.one },
+  areaGroup: { gap: Spacing.two },
+  areaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  markAllButton: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderRadius: Spacing.four,
   },
   sightingRow: {
     borderRadius: Spacing.two,
