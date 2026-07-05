@@ -36,6 +36,10 @@ export interface DiveSite {
   difficulty: string;
   description: string;
   heroImageUrl?: string;
+  photoUrl?: string;
+  photoCredit?: string;
+  photoLicense?: string;
+  photoSourceUrl?: string;
 }
 
 export interface SiteSpeciesLink {

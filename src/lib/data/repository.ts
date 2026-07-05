@@ -40,6 +40,10 @@ function mapSiteRow(row: any): DiveSite {
     difficulty: row.difficulty,
     description: row.description,
     heroImageUrl: row.hero_image_url ?? undefined,
+    photoUrl: row.photo_url ?? undefined,
+    photoCredit: row.photo_credit ?? undefined,
+    photoLicense: row.photo_license ?? undefined,
+    photoSourceUrl: row.photo_source_url ?? undefined,
   };
 }
 
