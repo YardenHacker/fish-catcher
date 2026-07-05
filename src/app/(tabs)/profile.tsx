@@ -4,11 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SignInForm } from '@/components/sign-in-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 export default function ProfileScreen() {
+  const theme = useTheme();
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -27,7 +30,7 @@ export default function ProfileScreen() {
 
           <View style={styles.section}>
             <ThemedText type="smallBold">About</ThemedText>
-            <ThemedView type="backgroundElement" style={styles.aboutCard}>
+            <ThemedView type="backgroundElement" style={[styles.aboutCard, { borderColor: theme.border }]}>
               <ThemedText type="default" themeColor="textSecondary">
                 Fish Catcher catalogs real marine species found around Sharm el Sheikh dive sites, including Ras
                 Mohammed, the Straits of Tiran, and the local house reefs. Mark species as found as you spot
@@ -43,11 +46,12 @@ export default function ProfileScreen() {
 }
 
 function SyncSection() {
+  const theme = useTheme();
   const { isLoading, user, signOut } = useAuth();
 
   if (!isSupabaseConfigured) {
     return (
-      <ThemedView type="backgroundElement" style={styles.statusRow}>
+      <ThemedView type="backgroundElement" style={[styles.statusRow, { borderColor: theme.border }]}>
         <View style={[styles.statusDot, styles.statusDotOffline]} />
         <View style={styles.statusTextGroup}>
           <ThemedText type="default">Offline mode</ThemedText>
@@ -70,7 +74,7 @@ function SyncSection() {
   if (user) {
     return (
       <View style={{ gap: Spacing.two }}>
-        <ThemedView type="backgroundElement" style={styles.statusRow}>
+        <ThemedView type="backgroundElement" style={[styles.statusRow, { borderColor: theme.border }]}>
           <View style={[styles.statusDot, styles.statusDotOnline]} />
           <View style={styles.statusTextGroup}>
             <ThemedText type="default">Synced as {user.email}</ThemedText>
@@ -79,7 +83,7 @@ function SyncSection() {
             </ThemedText>
           </View>
         </ThemedView>
-        <Pressable style={styles.secondaryButton} onPress={() => signOut()}>
+        <Pressable style={[styles.secondaryButton, { borderColor: theme.border }]} onPress={() => signOut()}>
           <ThemedText type="smallBold">Sign out</ThemedText>
         </Pressable>
       </View>
@@ -111,31 +115,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.two,
-    borderRadius: Spacing.four,
+    borderRadius: Radii.large,
+    borderWidth: 1,
     padding: Spacing.three,
   },
   statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: Radii.small,
     marginTop: Spacing.one,
   },
   statusDotOnline: {
-    backgroundColor: '#2E9E5B',
+    backgroundColor: '#2FE07E',
   },
   statusDotOffline: {
-    backgroundColor: '#2E7DD1',
+    backgroundColor: '#3B9DFF',
   },
   statusTextGroup: {
     flex: 1,
     gap: Spacing.half,
   },
   aboutCard: {
-    borderRadius: Spacing.four,
+    borderRadius: Radii.large,
+    borderWidth: 1,
     padding: Spacing.three,
   },
   secondaryButton: {
-    borderRadius: Spacing.two,
+    borderRadius: Radii.medium,
+    borderWidth: 1,
     paddingVertical: Spacing.two,
     alignItems: 'center',
   },

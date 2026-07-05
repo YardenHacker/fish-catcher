@@ -1,6 +1,9 @@
+import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
+import { SpaceGrotesk_400Regular, SpaceGrotesk_500Medium } from '@expo-google-fonts/space-grotesk';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
 import { useState } from 'react';
 import { useColorScheme } from 'react-native';
 
@@ -21,12 +24,24 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // HUD theme uses Space Grotesk for headings and JetBrains Mono for every
+  // numeric/stat readout (see Fonts in src/constants/theme.ts). Loaded once
+  // here, following the same "render nothing until ready" gate already used
+  // below for the auth session check, so no screen ever flashes system fonts
+  // before swapping to the real typeface.
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_500Medium,
+  });
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <AnimatedSplashOverlay />
-          <AppShell />
+          {fontsLoaded && <AppShell />}
         </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>

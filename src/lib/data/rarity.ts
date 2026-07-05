@@ -37,12 +37,14 @@ export function tierForScore(score: number): RarityTier {
   return 'Common';
 }
 
+// HUD-style tier colors: same hue-per-tier mapping as before, punched up to
+// read as glowing instrument-panel accents rather than pastel badges.
 export const RARITY_TIER_COLOR: Record<RarityTier, string> = {
-  Common: '#7A8A99',
-  Uncommon: '#2E9E5B',
-  Rare: '#2E7DD1',
-  Epic: '#9B4FE0',
-  Legendary: '#E0A62E',
+  Common: '#8FA3B0',
+  Uncommon: '#2FE07E',
+  Rare: '#3B9DFF',
+  Epic: '#B662FF',
+  Legendary: '#FFC22E',
 };
 
 export const RARITY_TIER_ORDER: RarityTier[] = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];

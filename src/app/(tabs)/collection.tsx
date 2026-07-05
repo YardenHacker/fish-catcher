@@ -1,18 +1,23 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CornerFrame } from '@/components/corner-frame';
+import { RarityTag } from '@/components/rarity-tag';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useFinds, useSpeciesList, useUserPhotos, RARITY_TIER_COLOR, RARITY_TIER_ORDER } from '@/lib/data';
 import type { RarityTier, Species } from '@/lib/data';
 
 type FoundSpecies = Species & { firstFoundAt: string };
 
 export default function CollectionScreen() {
+  const theme = useTheme();
   const { data: species, isLoading: speciesLoading } = useSpeciesList();
   const { data: finds, isLoading: findsLoading } = useFinds();
 
@@ -48,6 +53,7 @@ export default function CollectionScreen() {
   }, [found]);
 
   const totalCount = species?.length ?? 0;
+  const pct = totalCount > 0 ? Math.min(1, found.length / totalCount) : 0;
 
   return (
     <ThemedView style={styles.container}>
@@ -61,20 +67,25 @@ export default function CollectionScreen() {
             </ThemedText>
           ) : (
             <>
-              <ThemedView type="backgroundElement" style={styles.statsCard}>
-                <ThemedText type="subtitle">
-                  Found {found.length}/{totalCount}
-                </ThemedText>
-                <ThemedText type="default" themeColor="textSecondary">
-                  Collection score: {collectionScore}
-                </ThemedText>
+              <ThemedView type="backgroundElement" style={[styles.statsCard, { borderColor: theme.border }]}>
+                <View style={styles.statsHeaderRow}>
+                  <ThemedText type="mono" themeColor="textSecondary">
+                    FOUND {String(found.length).padStart(2, '0')}/{String(totalCount).padStart(2, '0')}
+                  </ThemedText>
+                  <ThemedText type="mono" themeColor="textSecondary">
+                    SCORE {collectionScore}
+                  </ThemedText>
+                </View>
+                <View style={[styles.progressTrack, { backgroundColor: theme.backgroundSelected, borderColor: theme.border }]}>
+                  <View style={[styles.progressFill, { width: `${pct * 100}%`, backgroundColor: theme.accent }]} />
+                </View>
 
                 <View style={styles.tierRow}>
                   {RARITY_TIER_ORDER.map((tier) => (
                     <View key={tier} style={styles.tierChip}>
                       <View style={[styles.tierDot, { backgroundColor: RARITY_TIER_COLOR[tier] }]} />
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {tier} {tierCounts[tier]}
+                      <ThemedText type="mono" themeColor="textSecondary">
+                        {tier.toUpperCase()} {tierCounts[tier]}
                       </ThemedText>
                     </View>
                   ))}
@@ -104,6 +115,7 @@ export default function CollectionScreen() {
 }
 
 function FoundRow({ species }: { species: FoundSpecies }) {
+  const theme = useTheme();
   const { data: userPhotos } = useUserPhotos({ speciesId: species.id });
   const tierColor = RARITY_TIER_COLOR[species.rarityTier];
   // Prefer your own uploaded photo of it; fall back to the catalog photo,
@@ -113,8 +125,8 @@ function FoundRow({ species }: { species: FoundSpecies }) {
   return (
     <Link href={`/creature/${species.slug}`} asChild>
       <Pressable>
-        <ThemedView type="backgroundElement" style={styles.row}>
-          <View style={[styles.thumbnailWrap, { backgroundColor: `${tierColor}33` }]}>
+        <ThemedView type="backgroundElement" style={[styles.row, { borderColor: theme.border }]}>
+          <View style={[styles.thumbnailWrap, { backgroundColor: theme.backgroundSelected }]}>
             {displayPhotoUri ? (
               <Image source={{ uri: displayPhotoUri }} style={styles.thumbnail} contentFit="cover" />
             ) : (
@@ -122,17 +134,18 @@ function FoundRow({ species }: { species: FoundSpecies }) {
                 {species.commonName.charAt(0).toUpperCase()}
               </ThemedText>
             )}
-          </View>
-          <View style={styles.rowMain}>
-            <View style={[styles.tierDot, { backgroundColor: tierColor }]} />
-            <View style={styles.rowText}>
-              <ThemedText type="smallBold">{species.commonName}</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {species.rarityTier}
-              </ThemedText>
+            <CornerFrame color={tierColor} />
+            <View style={[styles.foundBadge, { backgroundColor: tierColor }]}>
+              <Ionicons name="checkmark" size={10} color={theme.accentContrast} />
             </View>
           </View>
-          <ThemedText type="small" themeColor="textSecondary">
+          <View style={styles.rowMain}>
+            <View style={styles.rowText}>
+              <ThemedText type="smallBold">{species.commonName}</ThemedText>
+              <RarityTag label={species.rarityTier} color={tierColor} />
+            </View>
+          </View>
+          <ThemedText type="mono" themeColor="textSecondary">
             {new Date(species.firstFoundAt).toLocaleDateString()}
           </ThemedText>
         </ThemedView>
@@ -154,9 +167,24 @@ const styles = StyleSheet.create({
   },
   loading: { paddingTop: Spacing.three },
   statsCard: {
-    borderRadius: Spacing.four,
+    borderRadius: Radii.large,
+    borderWidth: 1,
     padding: Spacing.three,
-    gap: Spacing.one,
+    gap: Spacing.two,
+  },
+  statsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: Radii.small,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: Radii.small,
   },
   tierRow: {
     flexDirection: 'row',
@@ -175,7 +203,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   emptyState: {
-    borderRadius: Spacing.four,
+    borderRadius: Radii.large,
     padding: Spacing.four,
   },
   emptyText: {
@@ -190,13 +218,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
-    borderRadius: Spacing.three,
+    borderRadius: Radii.large,
+    borderWidth: 1,
     padding: Spacing.three,
   },
   thumbnailWrap: {
     width: 56,
     height: 56,
-    borderRadius: Spacing.two,
+    borderRadius: Radii.medium,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -208,6 +237,16 @@ const styles = StyleSheet.create({
   thumbnailGlyph: {
     fontSize: 28,
     fontWeight: '600',
+  },
+  foundBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: Radii.small,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rowMain: {
     flexDirection: 'row',
