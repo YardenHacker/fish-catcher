@@ -13,9 +13,11 @@ import {
   RARITY_TIER_COLOR,
   useAddUserPhoto,
   useRateSite,
+  useSightingsForSite,
   useSite,
   useSiteRating,
   useSpeciesForSite,
+  useSpeciesList,
   useUserPhotos,
 } from '@/lib/data';
 import type { Species } from '@/lib/data';
@@ -48,6 +50,42 @@ function SpeciesRow({ species }: { species: Species }) {
   );
 }
 
+function SightedSpeciesRow({ species, count }: { species: Species; count: number }) {
+  const { data: photos } = useUserPhotos({ speciesId: species.id });
+
+  return (
+    <View style={styles.sightedSpeciesBlock}>
+      <Link href={`/creature/${species.slug}`} asChild>
+        <Pressable style={({ pressed }) => [pressed && styles.rowPressed]}>
+          <ThemedView type="backgroundElement" style={styles.speciesRow}>
+            <View style={[styles.rarityDot, { backgroundColor: RARITY_TIER_COLOR[species.rarityTier] }]} />
+            <ThemedText type="default" style={styles.speciesName}>
+              {species.commonName}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Seen {count}×
+            </ThemedText>
+          </ThemedView>
+        </Pressable>
+      </Link>
+      {photos && photos.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.photoRow}>
+            {photos.map((photo) => (
+              <Image
+                key={photo.id}
+                source={{ uri: photo.uri }}
+                style={styles.sightedThumbnail}
+                contentFit="cover"
+              />
+            ))}
+          </View>
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
 function StarRating({ rating, onChange }: { rating: number; onChange: (value: number) => void }) {
   const theme = useTheme();
   return (
@@ -69,6 +107,13 @@ export default function SiteDetailScreen() {
   const rateSite = useRateSite();
   const { data: userPhotos } = useUserPhotos({ siteId: site?.id });
   const addUserPhoto = useAddUserPhoto();
+  const { data: sightings, isLoading: isSightingsLoading } = useSightingsForSite(site?.id);
+  const { data: speciesList } = useSpeciesList();
+
+  const sightedSpecies = (sightings ?? []).flatMap((sighting) => {
+    const matched = speciesList?.find((s) => s.id === sighting.speciesId);
+    return matched ? [{ species: matched, count: sighting.count }] : [];
+  });
 
   const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState('');
@@ -175,6 +220,27 @@ export default function SiteDetailScreen() {
               <View style={styles.rowList}>
                 {species.map((s) => (
                   <SpeciesRow key={s.id} species={s} />
+                ))}
+              </View>
+            )}
+
+            <ThemedText type="subtitle" style={styles.sectionHeader}>
+              Fish I've seen here
+            </ThemedText>
+            {isSightingsLoading && (
+              <ThemedText type="small" themeColor="textSecondary">
+                Loading your sightings…
+              </ThemedText>
+            )}
+            {!isSightingsLoading && sightedSpecies.length === 0 && (
+              <ThemedText type="small" themeColor="textSecondary">
+                You haven't logged any sightings here yet — mark fish as seen from their creature page.
+              </ThemedText>
+            )}
+            {!isSightingsLoading && sightedSpecies.length > 0 && (
+              <View style={styles.rowList}>
+                {sightedSpecies.map(({ species: s, count }) => (
+                  <SightedSpeciesRow key={s.id} species={s} count={count} />
                 ))}
               </View>
             )}
@@ -296,6 +362,14 @@ const styles = StyleSheet.create({
   },
   rowPressed: {
     opacity: 0.6,
+  },
+  sightedSpeciesBlock: {
+    gap: Spacing.one,
+  },
+  sightedThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: Spacing.one,
   },
   photoRow: {
     flexDirection: 'row',
