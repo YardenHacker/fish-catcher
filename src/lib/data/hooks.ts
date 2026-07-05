@@ -81,6 +81,34 @@ export function useSetSightingCount() {
       progress.setSightingCount(speciesId, siteId, count),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sightings', user?.id ?? 'local', variables.speciesId] });
+      queryClient.invalidateQueries({ queryKey: ['site-sightings', user?.id ?? 'local', variables.siteId] });
+      queryClient.invalidateQueries({ queryKey: ['finds', user?.id ?? 'local'] });
+    },
+  });
+}
+
+/** Every species the user has personally logged a sighting of at one site (the flip side of useSightingsForSpecies). */
+export function useSightingsForSite(siteId: string | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['site-sightings', user?.id ?? 'local', siteId],
+    queryFn: () => progress.getSightingsForSite(siteId!),
+    enabled: Boolean(siteId),
+  });
+}
+
+/** "I saw this everywhere in this area" bulk action -- see progressStore.markAllSightingsForSites. */
+export function useMarkAllSightingsForSites() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: ({ speciesId, siteIds }: { speciesId: string; siteIds: string[] }) =>
+      progress.markAllSightingsForSites(speciesId, siteIds),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sightings', user?.id ?? 'local', variables.speciesId] });
+      for (const siteId of variables.siteIds) {
+        queryClient.invalidateQueries({ queryKey: ['site-sightings', user?.id ?? 'local', siteId] });
+      }
       queryClient.invalidateQueries({ queryKey: ['finds', user?.id ?? 'local'] });
     },
   });

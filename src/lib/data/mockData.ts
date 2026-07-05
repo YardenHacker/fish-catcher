@@ -22,6 +22,8 @@ interface SeedSpecies {
   habitat: string;
   sites: string[];
   frequency: string;
+  population_info?: string;
+  best_season?: string | null;
 }
 
 interface SeedSite {
@@ -77,6 +79,8 @@ export const MOCK_SPECIES: Species[] = seedSpecies.map((s) => {
     photoCredit: undefined,
     photoLicense: undefined,
     photoSourceUrl: undefined,
+    populationInfo: s.population_info,
+    bestSeason: s.best_season ?? undefined,
   };
 });
 
