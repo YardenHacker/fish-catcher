@@ -52,9 +52,11 @@ function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: num
 
       var map = L.map('map').setView([${DEFAULT_CENTER[0]}, ${DEFAULT_CENTER[1]}], ${DEFAULT_ZOOM});
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 20,
+        subdomains: 'abcd',
+        detectRetina: true,
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
       }).addTo(map);
 
       var userIcon = L.icon({
