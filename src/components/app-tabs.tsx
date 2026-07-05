@@ -13,7 +13,7 @@ export default function AppTabs() {
       indicatorColor={colors.backgroundSelected}
       labelStyle={{ selected: { color: colors.accent } }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Dex</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Fish</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="water.waves" md="water" />
       </NativeTabs.Trigger>
 

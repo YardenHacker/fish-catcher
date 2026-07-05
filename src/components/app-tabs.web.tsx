@@ -13,8 +13,8 @@ export default function AppTabs() {
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="dex" href="/" asChild>
-            <TabButton icon="🐠">Dex</TabButton>
+          <TabTrigger name="fish" href="/" asChild>
+            <TabButton icon="🐠">Fish</TabButton>
           </TabTrigger>
           <TabTrigger name="sites" href="/sites" asChild>
             <TabButton icon="🗺️">Sites</TabButton>

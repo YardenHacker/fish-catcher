@@ -191,7 +191,7 @@ export default function CreatureDetailScreen() {
         <SafeAreaView style={styles.safeArea}>
           <ThemedText type="title">Not found</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            This creature doesn&apos;t exist in the Dex.
+            This creature doesn&apos;t exist in the Fish tab.
           </ThemedText>
         </SafeAreaView>
       </ThemedView>
