@@ -24,19 +24,36 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // Wikimedia's APIs (Wikipedia + Commons) rate-limit (429) under sustained
 // traffic across an 18-site run. Retry a couple of times with backoff
 // instead of silently treating a transient 429 as "no photo exists".
+// Each attempt also gets a hard timeout so a stalled connection can't hang
+// the whole run indefinitely (observed once against commons.wikimedia.org).
+const REQUEST_TIMEOUT_MS = 20000
+
 async function fetchWithRetry(url, options, retries = 3) {
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(url, options)
-    if (res.status !== 429) return res
+    try {
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+      if (res.status !== 429) return res
+    } catch (e) {
+      if (attempt === retries) throw e
+    }
     await sleep(2000 * (attempt + 1))
   }
-  return fetch(url, options)
+  return fetch(url, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
 }
 
 async function fromCommonsSearch(query) {
   // Searches the whole Commons File: namespace for a query string.
   const api = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(query)}&gsrlimit=10&prop=imageinfo&iiprop=url|extmetadata|size&format=json&origin=*`
-  const res = await fetchWithRetry(api, { headers: { 'User-Agent': 'FishCatcher/1.0 (site photo pipeline)' } })
+  let res
+  try {
+    res = await fetchWithRetry(api, { headers: { 'User-Agent': 'FishCatcher/1.0 (site photo pipeline)' } })
+  } catch (e) {
+    // A timeout/network error on one search term must not abort the whole
+    // run -- treat it like "no photo found for this term" and let the
+    // caller move on to the next search term / fallback.
+    console.warn(`  search failed for "${query}": ${e.message || e}`)
+    return null
+  }
   if (!res.ok) return null
   const data = await res.json()
   const pages = Object.values(data.query?.pages || {})
@@ -119,7 +136,12 @@ async function main() {
     const { pick, exact } = await findPhotoFor(site)
     if (!pick?.imageUrl) { console.warn(`NO PHOTO: ${site.slug} (${site.name}) -- flag for manual pick`); failures.push(site.slug); continue }
 
-    const img = await fetchWithRetry(pick.imageUrl)
+    let img
+    try {
+      img = await fetchWithRetry(pick.imageUrl)
+    } catch (e) {
+      console.warn(`download failed ${site.slug}: ${e.message || e}`); failures.push(site.slug); continue
+    }
     if (!img.ok) { console.warn(`download failed ${site.slug} (HTTP ${img.status})`); failures.push(site.slug); continue }
     const buf = Buffer.from(await img.arrayBuffer())
     const ext = (pick.imageUrl.split('.').pop() || 'jpg').split('?')[0].slice(0, 4)
