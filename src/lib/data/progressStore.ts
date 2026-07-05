@@ -2,10 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { isSupabaseConfigured, supabase } from '../supabase';
 
-import { Find, SiteRating, UserPhoto } from './types';
+import { Find, Sighting, SiteRating, UserPhoto } from './types';
 
 const KEYS = {
-  finds: 'reefdex.finds',
+  sightings: 'reefdex.sightings',
   photos: 'reefdex.photos',
   ratings: 'reefdex.ratings',
 };
@@ -25,7 +25,7 @@ async function writeJson<T>(key: string, value: T): Promise<void> {
 }
 
 /**
- * Personal data (finds, photos, ratings) lives on Supabase once a user is
+ * Personal data (sightings, photos, ratings) lives on Supabase once a user is
  * signed in -- same "shared source of truth" model as species/sites -- and
  * falls back to on-device storage otherwise, so the app still works fully
  * offline / signed-out.
@@ -34,15 +34,6 @@ async function getUserId(): Promise<string | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id ?? null;
-}
-
-function mapFindRow(row: any): Find {
-  return {
-    speciesId: row.species_id,
-    siteId: row.site_id ?? undefined,
-    notes: row.notes ?? undefined,
-    firstFoundAt: row.first_found_at,
-  };
 }
 
 function mapRatingRow(row: any): SiteRating {
@@ -54,76 +45,119 @@ function mapRatingRow(row: any): SiteRating {
   };
 }
 
-// ---------- Finds ----------
+// ---------- Sightings (per species, per site, with a count) ----------
+// Presence of a row = seen there; a species' total across all its rows
+// drives the Dex lock/unlock and the Collection list/score.
 
-export async function getFinds(): Promise<Find[]> {
-  const userId = await getUserId();
-  if (userId && supabase) {
-    const { data, error } = await supabase.from('finds').select('*').eq('user_id', userId);
-    if (error) throw error;
-    return (data ?? []).map(mapFindRow);
-  }
-  return readJson<Find[]>(KEYS.finds, []);
+interface LocalSighting extends Sighting {
+  createdAt: string;
 }
 
-export async function isFound(speciesId: string): Promise<boolean> {
-  const finds = await getFinds();
-  return finds.some((f) => f.speciesId === speciesId);
-}
-
-export async function markFound(speciesId: string, siteId?: string, notes?: string): Promise<Find> {
+export async function getSightingsForSpecies(speciesId: string): Promise<Sighting[]> {
   const userId = await getUserId();
   if (userId && supabase) {
-    const { data: existing } = await supabase
-      .from('finds')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('species_id', speciesId)
-      .maybeSingle();
-    if (existing) return mapFindRow(existing);
-
     const { data, error } = await supabase
-      .from('finds')
-      .insert({ user_id: userId, species_id: speciesId, site_id: siteId ?? null, notes: notes ?? null })
-      .select()
-      .single();
+      .from('sightings')
+      .select('species_id, site_id, count, updated_at')
+      .eq('user_id', userId)
+      .eq('species_id', speciesId);
     if (error) throw error;
-    return mapFindRow(data);
+    return (data ?? []).map((row: any) => ({
+      speciesId: row.species_id,
+      siteId: row.site_id,
+      count: row.count,
+      updatedAt: row.updated_at,
+    }));
   }
 
-  const finds = await readJson<Find[]>(KEYS.finds, []);
-  const existing = finds.find((f) => f.speciesId === speciesId);
-  if (existing) return existing;
-
-  const find: Find = { speciesId, siteId, notes, firstFoundAt: new Date().toISOString() };
-  await writeJson(KEYS.finds, [...finds, find]);
-  return find;
+  const all = await readJson<LocalSighting[]>(KEYS.sightings, []);
+  return all
+    .filter((s) => s.speciesId === speciesId)
+    .map(({ speciesId: sId, siteId, count, updatedAt }) => ({ speciesId: sId, siteId, count, updatedAt }));
 }
 
-export async function unmarkFound(speciesId: string): Promise<void> {
+export async function setSightingCount(speciesId: string, siteId: string, count: number): Promise<void> {
   const userId = await getUserId();
+  const now = new Date().toISOString();
+
   if (userId && supabase) {
-    const { error } = await supabase.from('finds').delete().eq('user_id', userId).eq('species_id', speciesId);
+    if (count <= 0) {
+      const { error } = await supabase
+        .from('sightings')
+        .delete()
+        .eq('user_id', userId)
+        .eq('species_id', speciesId)
+        .eq('site_id', siteId);
+      if (error) throw error;
+      return;
+    }
+    const { error } = await supabase
+      .from('sightings')
+      .upsert(
+        { user_id: userId, species_id: speciesId, site_id: siteId, count, updated_at: now },
+        { onConflict: 'user_id,species_id,site_id' },
+      );
     if (error) throw error;
     return;
   }
 
-  const finds = await readJson<Find[]>(KEYS.finds, []);
-  await writeJson(
-    KEYS.finds,
-    finds.filter((f) => f.speciesId !== speciesId),
-  );
+  const all = await readJson<LocalSighting[]>(KEYS.sightings, []);
+  const idx = all.findIndex((s) => s.speciesId === speciesId && s.siteId === siteId);
+  if (count <= 0) {
+    if (idx >= 0) {
+      all.splice(idx, 1);
+      await writeJson(KEYS.sightings, all);
+    }
+    return;
+  }
+  if (idx >= 0) {
+    all[idx] = { ...all[idx], count, updatedAt: now };
+  } else {
+    all.push({ speciesId, siteId, count, createdAt: now, updatedAt: now });
+  }
+  await writeJson(KEYS.sightings, all);
 }
 
-// ---------- User photos ----------
+export async function getFinds(): Promise<Find[]> {
+  const userId = await getUserId();
+  const bySpecies = new Map<string, { total: number; firstFoundAt: string }>();
+
+  function accumulate(speciesId: string, count: number, firstSeenCandidate: string) {
+    const existing = bySpecies.get(speciesId);
+    if (existing) {
+      existing.total += count;
+      if (firstSeenCandidate < existing.firstFoundAt) existing.firstFoundAt = firstSeenCandidate;
+    } else {
+      bySpecies.set(speciesId, { total: count, firstFoundAt: firstSeenCandidate });
+    }
+  }
+
+  if (userId && supabase) {
+    const { data, error } = await supabase.from('sightings').select('species_id, count, created_at').eq('user_id', userId);
+    if (error) throw error;
+    for (const row of data ?? []) accumulate(row.species_id, row.count, row.created_at);
+  } else {
+    const all = await readJson<LocalSighting[]>(KEYS.sightings, []);
+    for (const row of all) accumulate(row.speciesId, row.count, row.createdAt);
+  }
+
+  return Array.from(bySpecies.entries()).map(([speciesId, v]) => ({
+    speciesId,
+    totalCount: v.total,
+    firstFoundAt: v.firstFoundAt,
+  }));
+}
+
+// ---------- User photos (species or dive site) ----------
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
-export async function getUserPhotos(speciesId?: string): Promise<UserPhoto[]> {
+export async function getUserPhotos(target: { speciesId?: string; siteId?: string }): Promise<UserPhoto[]> {
   const userId = await getUserId();
   if (userId && supabase) {
     let query = supabase.from('user_photos').select('*').eq('user_id', userId);
-    if (speciesId) query = query.eq('species_id', speciesId);
+    if (target.speciesId) query = query.eq('species_id', target.speciesId);
+    if (target.siteId) query = query.eq('site_id', target.siteId);
     const { data, error } = await query;
     if (error) throw error;
 
@@ -135,7 +169,8 @@ export async function getUserPhotos(speciesId?: string): Promise<UserPhoto[]> {
           .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS);
         return {
           id: row.id,
-          speciesId: row.species_id,
+          speciesId: row.species_id ?? undefined,
+          siteId: row.site_id ?? undefined,
           uri: signedUrl?.signedUrl ?? '',
           takenAt: row.taken_at ?? row.created_at,
         };
@@ -145,13 +180,19 @@ export async function getUserPhotos(speciesId?: string): Promise<UserPhoto[]> {
   }
 
   const photos = await readJson<UserPhoto[]>(KEYS.photos, []);
-  return speciesId ? photos.filter((p) => p.speciesId === speciesId) : photos;
+  return photos.filter((p) => {
+    if (target.speciesId && p.speciesId !== target.speciesId) return false;
+    if (target.siteId && p.siteId !== target.siteId) return false;
+    return true;
+  });
 }
 
-export async function addUserPhoto(speciesId: string, uri: string): Promise<UserPhoto> {
+export async function addUserPhoto(target: { speciesId?: string; siteId?: string; uri: string }): Promise<UserPhoto> {
+  const { speciesId, siteId, uri } = target;
   const userId = await getUserId();
+
   if (userId && supabase) {
-    const path = `${userId}/${speciesId}-${Date.now()}.jpg`;
+    const path = `${userId}/${speciesId ?? `site-${siteId}`}-${Date.now()}.jpg`;
     const response = await fetch(uri);
     const blob = await response.blob();
     const { error: uploadError } = await supabase.storage
@@ -162,17 +203,23 @@ export async function addUserPhoto(speciesId: string, uri: string): Promise<User
     const takenAt = new Date().toISOString();
     const { data, error } = await supabase
       .from('user_photos')
-      .insert({ user_id: userId, species_id: speciesId, storage_path: path, taken_at: takenAt })
+      .insert({ user_id: userId, species_id: speciesId ?? null, site_id: siteId ?? null, storage_path: path, taken_at: takenAt })
       .select()
       .single();
     if (error) throw error;
 
     const { data: signedUrl } = await supabase.storage.from('user-photos').createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-    return { id: data.id, speciesId, uri: signedUrl?.signedUrl ?? uri, takenAt };
+    return { id: data.id, speciesId, siteId, uri: signedUrl?.signedUrl ?? uri, takenAt };
   }
 
   const photos = await readJson<UserPhoto[]>(KEYS.photos, []);
-  const photo: UserPhoto = { id: `${speciesId}-${Date.now()}`, speciesId, uri, takenAt: new Date().toISOString() };
+  const photo: UserPhoto = {
+    id: `${speciesId ?? siteId}-${Date.now()}`,
+    speciesId,
+    siteId,
+    uri,
+    takenAt: new Date().toISOString(),
+  };
   await writeJson(KEYS.photos, [...photos, photo]);
   return photo;
 }
