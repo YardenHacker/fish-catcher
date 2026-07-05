@@ -1,11 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs, TabList, TabTrigger, TabSlot, TabTriggerSlotProps, TabListProps } from 'expo-router/ui';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { ComponentProps } from 'react';
+import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 export default function AppTabs() {
   return (
@@ -14,19 +19,19 @@ export default function AppTabs() {
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="fish" href="/" asChild>
-            <TabButton icon="🐠">Fish</TabButton>
+            <TabButton icon="fish-outline">Fish</TabButton>
           </TabTrigger>
           <TabTrigger name="sites" href="/sites" asChild>
-            <TabButton icon="🗺️">Sites</TabButton>
+            <TabButton icon="map-outline">Sites</TabButton>
           </TabTrigger>
           <TabTrigger name="map" href="/map" asChild>
-            <TabButton icon="📍">Map</TabButton>
+            <TabButton icon="location-outline">Map</TabButton>
           </TabTrigger>
           <TabTrigger name="collection" href="/collection" asChild>
-            <TabButton icon="⭐">Collection</TabButton>
+            <TabButton icon="star-outline">Collection</TabButton>
           </TabTrigger>
           <TabTrigger name="profile" href="/profile" asChild>
-            <TabButton icon="👤">Profile</TabButton>
+            <TabButton icon="person-outline">Profile</TabButton>
           </TabTrigger>
         </CustomTabList>
       </TabList>
@@ -34,13 +39,16 @@ export default function AppTabs() {
   );
 }
 
-// SF Symbols don't have a meaningful web equivalent (the web fallback renders
-// a plain circle glyph), so plain emoji are used here instead -- they render
-// identically everywhere with no icon library needed.
-export function TabButton({ children, isFocused, icon, ...props }: TabTriggerSlotProps & { icon?: string }) {
+export function TabButton({
+  children,
+  isFocused,
+  icon,
+  ...props
+}: TabTriggerSlotProps & { icon?: IoniconName }) {
+  const theme = useTheme();
   return (
     <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
-      <Text style={styles.tabIcon}>{icon}</Text>
+      {icon && <Ionicons name={icon} size={20} color={isFocused ? theme.accent : theme.textSecondary} />}
       <ThemedText type="small" themeColor={isFocused ? 'accent' : 'textSecondary'} style={isFocused && styles.focusedLabel}>
         {children}
       </ThemedText>
@@ -49,8 +57,9 @@ export function TabButton({ children, isFocused, icon, ...props }: TabTriggerSlo
 }
 
 export function CustomTabList(props: TabListProps) {
+  const theme = useTheme();
   return (
-    <ThemedView type="backgroundElement" style={styles.barShadowWrap}>
+    <ThemedView type="backgroundElement" style={[styles.barShadowWrap, { borderTopColor: theme.border }]}>
       <SafeAreaView edges={['bottom']}>
         <ThemedView {...props} type="backgroundElement" style={styles.tabBar} />
       </SafeAreaView>
@@ -65,7 +74,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.08)',
   },
   tabBar: {
     flexDirection: 'row',
@@ -82,9 +90,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
-  },
-  tabIcon: {
-    fontSize: 22,
   },
   focusedLabel: {
     fontWeight: '700',

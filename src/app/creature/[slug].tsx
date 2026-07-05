@@ -6,10 +6,12 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CollapsiblePicker, ToggleRow } from '@/components/collapsible-picker';
+import { CornerFrame } from '@/components/corner-frame';
 import { ExternalLink } from '@/components/external-link';
+import { RarityTag } from '@/components/rarity-tag';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   RARITY_TIER_COLOR,
@@ -96,7 +98,7 @@ function StatRow({ label, value }: { label: string; value: string }) {
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedText type="smallBold">{value}</ThemedText>
+      <ThemedText type="monoBold">{value}</ThemedText>
     </View>
   );
 }
@@ -204,7 +206,7 @@ export default function CreatureDetailScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={[styles.hero, { backgroundColor: `${tierColor}33` }]}>
+          <View style={[styles.hero, { backgroundColor: theme.backgroundSelected }]}>
             {species.photoUrl ? (
               <Image source={{ uri: species.photoUrl }} style={styles.heroPhoto} contentFit="cover" />
             ) : (
@@ -212,10 +214,9 @@ export default function CreatureDetailScreen() {
                 {species.commonName.charAt(0).toUpperCase()}
               </ThemedText>
             )}
-            <View style={[styles.rarityBadge, { backgroundColor: tierColor }]}>
-              <ThemedText type="small" style={styles.rarityBadgeText}>
-                {species.rarityTier}
-              </ThemedText>
+            <CornerFrame color={tierColor} />
+            <View style={styles.rarityBadgeWrap}>
+              <RarityTag label={species.rarityTier} color={tierColor} />
             </View>
           </View>
 
@@ -226,7 +227,7 @@ export default function CreatureDetailScreen() {
             </ThemedText>
           </View>
 
-          <ThemedView type="backgroundElement" style={styles.statsBlock}>
+          <ThemedView type="backgroundElement" style={[styles.statsBlock, { borderColor: theme.border }]}>
             <StatRow label="Rarity score" value={`${species.rarityScore}/100`} />
             <StatRow label="IUCN status" value={species.iucnStatus} />
             <StatRow label="Habitat" value={species.habitat} />
@@ -247,7 +248,7 @@ export default function CreatureDetailScreen() {
           )}
 
           <View style={styles.section}>
-            <ThemedView type="backgroundElement" style={styles.totalSeenBlock}>
+            <ThemedView type="backgroundElement" style={[styles.totalSeenBlock, { borderColor: theme.border }]}>
               {seenSiteCount > 0 ? (
                 <ThemedText type="smallBold" style={{ color: theme.accent }}>
                   Seen at {seenSiteCount} {seenSiteCount === 1 ? 'site' : 'sites'}
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
   scrollContent: { gap: Spacing.three, paddingBottom: BottomTabInset + Spacing.four },
   hero: {
     aspectRatio: 16 / 10,
-    borderRadius: Spacing.three,
+    borderRadius: Radii.large,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -365,25 +366,22 @@ const styles = StyleSheet.create({
   },
   heroPhoto: { width: '100%', height: '100%' },
   heroGlyph: { fontSize: 96, fontWeight: '600' },
-  rarityBadge: {
+  rarityBadgeWrap: {
     position: 'absolute',
     top: Spacing.two,
     right: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.four,
   },
-  rarityBadgeText: { color: '#ffffff' },
   titleBlock: { gap: Spacing.half },
   scientificName: { fontStyle: 'italic', fontSize: 18, lineHeight: 24 },
-  statsBlock: { borderRadius: Spacing.three, padding: Spacing.three, gap: Spacing.two },
+  statsBlock: { borderRadius: Radii.large, borderWidth: 1, padding: Spacing.three, gap: Spacing.two },
   statRow: { flexDirection: 'row', justifyContent: 'space-between' },
   section: { gap: Spacing.two },
   sectionTitle: { fontSize: 20, lineHeight: 26 },
   siteList: { gap: Spacing.three },
   attribution: {},
   totalSeenBlock: {
-    borderRadius: Spacing.two,
+    borderRadius: Radii.medium,
+    borderWidth: 1,
     padding: Spacing.three,
     alignItems: 'center',
   },
@@ -398,14 +396,14 @@ const styles = StyleSheet.create({
   markAllButton: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
-    borderRadius: Spacing.four,
+    borderRadius: Radii.small,
   },
   inlineAddPhoto: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.two },
   photoRow: { flexDirection: 'row', gap: Spacing.two },
   photoWithCaption: { gap: Spacing.half, alignItems: 'center' },
-  thumbnail: { width: 100, height: 100, borderRadius: Spacing.two },
+  thumbnail: { width: 100, height: 100, borderRadius: Radii.medium },
   addPhotoButton: {
-    borderRadius: Spacing.two,
+    borderRadius: Radii.medium,
     borderWidth: 1,
     padding: Spacing.three,
     alignItems: 'center',

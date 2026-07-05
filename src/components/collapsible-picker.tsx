@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
@@ -22,13 +22,15 @@ export function CollapsiblePicker({
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
+  const theme = useTheme();
+
   return (
-    <ThemedView type="backgroundElement" style={styles.container}>
+    <ThemedView type="backgroundElement" style={[styles.container, { borderColor: theme.border }]}>
       <Pressable onPress={() => setOpen((v) => !v)} style={styles.header}>
         <ThemedText type="default" style={styles.summary}>
           {summary}
         </ThemedText>
-        <ThemedText type="default" themeColor="textSecondary">
+        <ThemedText type="mono" themeColor="textSecondary">
           {open ? '▾' : '▸'}
         </ThemedText>
       </Pressable>
@@ -83,7 +85,8 @@ export function ToggleRow({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: Spacing.two,
+    borderRadius: Radii.large,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   header: {
@@ -105,7 +108,7 @@ const styles = StyleSheet.create({
   checkCircle: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: Radii.small,
     alignItems: 'center',
     justifyContent: 'center',
   },
