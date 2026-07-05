@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,10 +13,10 @@ import {
   RARITY_TIER_COLOR,
   useAddUserPhoto,
   useRateSite,
+  useSetSightingCount,
   useSightingsForSite,
   useSite,
   useSiteRating,
-  useSpeciesForSite,
   useSpeciesList,
   useUserPhotos,
 } from '@/lib/data';
@@ -32,43 +32,64 @@ function Badge({ label }: { label: string }) {
   );
 }
 
-function SpeciesRow({ species }: { species: Species }) {
-  return (
-    <Link href={`/creature/${species.slug}`} asChild>
-      <Pressable style={({ pressed }) => [pressed && styles.rowPressed]}>
-        <ThemedView type="backgroundElement" style={styles.speciesRow}>
-          <View style={[styles.rarityDot, { backgroundColor: RARITY_TIER_COLOR[species.rarityTier] }]} />
-          <ThemedText type="default" style={styles.speciesName}>
-            {species.commonName}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {species.rarityTier}
-          </ThemedText>
-        </ThemedView>
-      </Pressable>
-    </Link>
-  );
-}
-
-function SightedSpeciesRow({ species, count }: { species: Species; count: number }) {
-  const { data: photos } = useUserPhotos({ speciesId: species.id });
+/**
+ * One row per species, always shown (not just already-logged ones) so this
+ * doubles as both the "what have I seen here" view and the way to mark a new
+ * sighting -- any fish can turn up at any site, not just a curated subset.
+ */
+function SiteSpeciesRow({
+  species,
+  count,
+  onChange,
+}: {
+  species: Species;
+  count: number;
+  onChange: (next: number) => void;
+}) {
+  const theme = useTheme();
+  const isLogged = count > 0;
+  // Only fetch photos for species actually logged here -- avoids firing a
+  // photos query for all 45 species when most have zero sightings at this site.
+  const { data: photos } = useUserPhotos({ speciesId: isLogged ? species.id : undefined });
 
   return (
     <View style={styles.sightedSpeciesBlock}>
-      <Link href={`/creature/${species.slug}`} asChild>
-        <Pressable style={({ pressed }) => [pressed && styles.rowPressed]}>
-          <ThemedView type="backgroundElement" style={styles.speciesRow}>
+      <ThemedView
+        type="backgroundElement"
+        style={[
+          styles.speciesRow,
+          isLogged && { backgroundColor: theme.backgroundSelected, borderColor: theme.accent, borderWidth: 1 },
+        ]}>
+        <Link href={`/creature/${species.slug}`} asChild>
+          <Pressable style={styles.speciesRowLink}>
             <View style={[styles.rarityDot, { backgroundColor: RARITY_TIER_COLOR[species.rarityTier] }]} />
             <ThemedText type="default" style={styles.speciesName}>
               {species.commonName}
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Seen {count}×
+          </Pressable>
+        </Link>
+        <View style={styles.stepper}>
+          <Pressable
+            onPress={() => onChange(Math.max(0, count - 1))}
+            disabled={count <= 0}
+            style={[styles.stepperButton, { backgroundColor: theme.accent, opacity: count <= 0 ? 0.4 : 1 }]}>
+            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
+              −
             </ThemedText>
-          </ThemedView>
-        </Pressable>
-      </Link>
-      {photos && photos.length > 0 && (
+          </Pressable>
+          <ThemedText type="smallBold" style={styles.stepperCount}>
+            {count}
+          </ThemedText>
+          <Pressable
+            onPress={() => onChange(count + 1)}
+            style={[styles.stepperButton, { backgroundColor: theme.accent }]}>
+            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
+              +
+            </ThemedText>
+          </Pressable>
+        </View>
+      </ThemedView>
+      {isLogged && photos && photos.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.photoRow}>
             {photos.map((photo) => (
@@ -102,18 +123,28 @@ function StarRating({ rating, onChange }: { rating: number; onChange: (value: nu
 export default function SiteDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { data: site, isLoading: isSiteLoading } = useSite(slug);
-  const { data: species, isLoading: isSpeciesLoading } = useSpeciesForSite(slug);
   const { data: existingRating } = useSiteRating(site?.id);
   const rateSite = useRateSite();
   const { data: userPhotos } = useUserPhotos({ siteId: site?.id });
   const addUserPhoto = useAddUserPhoto();
   const { data: sightings, isLoading: isSightingsLoading } = useSightingsForSite(site?.id);
-  const { data: speciesList } = useSpeciesList();
+  const { data: speciesList, isLoading: isSpeciesLoading } = useSpeciesList();
+  const setSightingCount = useSetSightingCount();
 
-  const sightedSpecies = (sightings ?? []).flatMap((sighting) => {
-    const matched = speciesList?.find((s) => s.id === sighting.speciesId);
-    return matched ? [{ species: matched, count: sighting.count }] : [];
-  });
+  // Every species is listed here (not just a curated catalog subset), sorted
+  // with whatever's already logged at this site first -- this list is both
+  // the "what have I seen here" view and the way to mark a new sighting.
+  const speciesWithCounts = useMemo(() => {
+    const countBySpeciesId = new Map((sightings ?? []).map((s) => [s.speciesId, s.count]));
+    const rows = (speciesList ?? []).map((sp) => ({ species: sp, count: countBySpeciesId.get(sp.id) ?? 0 }));
+    return rows.sort((a, b) => {
+      if (a.count > 0 && b.count === 0) return -1;
+      if (a.count === 0 && b.count > 0) return 1;
+      return a.species.commonName.localeCompare(b.species.commonName);
+    });
+  }, [speciesList, sightings]);
+
+  const isFishListLoading = isSpeciesLoading || isSightingsLoading;
 
   const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState('');
@@ -204,43 +235,23 @@ export default function SiteDetailScreen() {
             <ThemedText type="default">{site.description}</ThemedText>
 
             <ThemedText type="subtitle" style={styles.sectionHeader}>
-              Species seen here
-            </ThemedText>
-            {isSpeciesLoading && (
-              <ThemedText type="small" themeColor="textSecondary">
-                Loading species…
-              </ThemedText>
-            )}
-            {!isSpeciesLoading && (species?.length ?? 0) === 0 && (
-              <ThemedText type="small" themeColor="textSecondary">
-                No recorded sightings yet.
-              </ThemedText>
-            )}
-            {!isSpeciesLoading && species && species.length > 0 && (
-              <View style={styles.rowList}>
-                {species.map((s) => (
-                  <SpeciesRow key={s.id} species={s} />
-                ))}
-              </View>
-            )}
-
-            <ThemedText type="subtitle" style={styles.sectionHeader}>
               Fish I've seen here
             </ThemedText>
-            {isSightingsLoading && (
+            {isFishListLoading ? (
               <ThemedText type="small" themeColor="textSecondary">
-                Loading your sightings…
+                Loading fish…
               </ThemedText>
-            )}
-            {!isSightingsLoading && sightedSpecies.length === 0 && (
-              <ThemedText type="small" themeColor="textSecondary">
-                You haven't logged any sightings here yet — mark fish as seen from their creature page.
-              </ThemedText>
-            )}
-            {!isSightingsLoading && sightedSpecies.length > 0 && (
+            ) : (
               <View style={styles.rowList}>
-                {sightedSpecies.map(({ species: s, count }) => (
-                  <SightedSpeciesRow key={s.id} species={s} count={count} />
+                {speciesWithCounts.map(({ species: s, count }) => (
+                  <SiteSpeciesRow
+                    key={s.id}
+                    species={s}
+                    count={count}
+                    onChange={(next) =>
+                      setSightingCount.mutate({ speciesId: s.id, siteId: site.id, count: next })
+                    }
+                  />
                 ))}
               </View>
             )}
@@ -348,9 +359,16 @@ const styles = StyleSheet.create({
   speciesRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: Spacing.two,
     borderRadius: Spacing.two,
     padding: Spacing.three,
+  },
+  speciesRowLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flex: 1,
   },
   speciesName: {
     flex: 1,
@@ -360,9 +378,15 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
   },
-  rowPressed: {
-    opacity: 0.6,
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  stepperButton: {
+    width: 32,
+    height: 32,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  stepperCount: { minWidth: 24, textAlign: 'center' },
   sightedSpeciesBlock: {
     gap: Spacing.one,
   },

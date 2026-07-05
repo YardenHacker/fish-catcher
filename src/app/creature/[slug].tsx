@@ -16,6 +16,7 @@ import {
   useMarkAllSightingsForSites,
   useSetSightingCount,
   useSightingsForSpecies,
+  useSites,
   useSitesForSpecies,
   useSpecies,
   useUserPhotos,
@@ -143,7 +144,8 @@ export default function CreatureDetailScreen() {
   const theme = useTheme();
 
   const { data: species, isLoading } = useSpecies(slug);
-  const { data: sites } = useSitesForSpecies(slug);
+  const { data: catalogSites } = useSitesForSpecies(slug);
+  const { data: allSites } = useSites();
   const { data: userPhotos } = useUserPhotos({ speciesId: species?.id });
   const { data: sightings } = useSightingsForSpecies(species?.id);
   const setSightingCount = useSetSightingCount();
@@ -162,9 +164,11 @@ export default function CreatureDetailScreen() {
     [sightings],
   );
 
+  // Every site is markable (a fish can turn up anywhere), not just the
+  // curated catalog subset -- grouped by area purely for scannability.
   const sitesByArea = useMemo(() => {
     const map = new Map<string, DiveSite[]>();
-    for (const site of sites ?? []) {
+    for (const site of allSites ?? []) {
       const group = map.get(site.area);
       if (group) {
         group.push(site);
@@ -173,11 +177,13 @@ export default function CreatureDetailScreen() {
       }
     }
     return Array.from(map.entries());
-  }, [sites]);
+  }, [allSites]);
 
+  // "Best sites" stays based on the curated, researched placements (most
+  // notable site listed first), independent of the full markable site list above.
   const bestSites = useMemo(
-    () => (sites ?? []).slice(0, 2).map((s) => s.name).join(', ') || undefined,
-    [sites],
+    () => (catalogSites ?? []).slice(0, 2).map((s) => s.name).join(', ') || undefined,
+    [catalogSites],
   );
 
   async function handleAddPhoto() {
