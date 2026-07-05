@@ -22,9 +22,21 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSessio
 const OK_LICENSES = new Set(['cc0', 'cc-by', 'cc-by-sa', 'cc-by-nc', 'cc-by-nc-sa'])
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+// Wikimedia's APIs (Wikipedia + Commons) rate-limit (429) under sustained
+// traffic across a 45+ species run. Retry a couple of times with backoff
+// instead of silently treating a transient 429 as "no photo exists".
+async function fetchWithRetry(url, options, retries = 3) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(url, options)
+    if (res.status !== 429) return res
+    await sleep(2000 * (attempt + 1))
+  }
+  return fetch(url, options)
+}
+
 async function fromINaturalist(sciName) {
   const url = `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciName)}&rank=species&per_page=1`
-  const res = await fetch(url, { headers: { 'User-Agent': 'FishCatcher/1.0 (seed pipeline)' } })
+  const res = await fetchWithRetry(url, { headers: { 'User-Agent': 'FishCatcher/1.0 (seed pipeline)' } })
   if (!res.ok) return null
   const data = await res.json()
   const taxon = data.results?.[0]
@@ -41,7 +53,7 @@ async function fromINaturalist(sciName) {
 async function fromWikimedia(sciName) {
   // Grab the lead image of the species' Wikipedia page (Commons-hosted, CC/PD).
   const api = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=original&titles=${encodeURIComponent(sciName)}&origin=*`
-  const res = await fetch(api, { headers: { 'User-Agent': 'FishCatcher/1.0'} })
+  const res = await fetchWithRetry(api, { headers: { 'User-Agent': 'FishCatcher/1.0'} })
   if (!res.ok) return null
   const data = await res.json()
   const pages = data.query?.pages || {}
@@ -56,6 +68,32 @@ async function fromWikimedia(sciName) {
   }
 }
 
+async function fromCommonsSearch(sciName) {
+  // Broader than fromWikimedia: searches the whole Commons File: namespace
+  // instead of relying on one Wikipedia article having a usable lead image.
+  const api = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(sciName)}&gsrlimit=10&prop=imageinfo&iiprop=url|extmetadata|size&format=json&origin=*`
+  const res = await fetchWithRetry(api, { headers: { 'User-Agent': 'FishCatcher/1.0' } })
+  if (!res.ok) return null
+  const data = await res.json()
+  const pages = Object.values(data.query?.pages || {})
+  for (const p of pages) {
+    const info = p.imageinfo?.[0]
+    if (!info) continue
+    if ((info.width || 0) < 300) continue // skip icons/thumbnails
+    const licenseName = (info.extmetadata?.LicenseShortName?.value || '').trim()
+    if (!/^(cc0|cc[\s-]?by|public domain)/i.test(licenseName)) continue
+    const artistRaw = info.extmetadata?.Artist?.value || 'Wikimedia Commons contributor'
+    const credit = artistRaw.replace(/<[^>]+>/g, '').trim() || 'Wikimedia Commons contributor'
+    return {
+      imageUrl: info.url,
+      credit,
+      license: licenseName,
+      sourceUrl: `https://commons.wikimedia.org/wiki/${encodeURIComponent(p.title)}`,
+    }
+  }
+  return null
+}
+
 async function main() {
   const { data: speciesRows, error } = await supabase
     .from('species')
@@ -66,10 +104,11 @@ async function main() {
     if (sp.photo_url) { console.log(`skip ${sp.slug} (already has photo)`); continue }
     let pick = await fromINaturalist(sp.scientific_name)
     if (!pick) pick = await fromWikimedia(sp.scientific_name)
+    if (!pick) pick = await fromCommonsSearch(sp.scientific_name)
     if (!pick?.imageUrl) { console.warn(`NO PHOTO: ${sp.slug} (${sp.scientific_name}) — flag for manual pick`); continue }
 
-    const img = await fetch(pick.imageUrl)
-    if (!img.ok) { console.warn(`download failed ${sp.slug}`); continue }
+    const img = await fetchWithRetry(pick.imageUrl)
+    if (!img.ok) { console.warn(`download failed ${sp.slug} (HTTP ${img.status})`); continue }
     const buf = Buffer.from(await img.arrayBuffer())
     const ext = (pick.imageUrl.split('.').pop() || 'jpg').split('?')[0].slice(0, 4)
     const path = `${sp.slug}.${ext}`
