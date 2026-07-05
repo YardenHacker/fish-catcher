@@ -53,7 +53,7 @@ export function useSitesForSpecies(speciesSlug: string | undefined) {
   });
 }
 
-// ---------- Personal progress (finds / photos / ratings) ----------
+// ---------- Personal progress (sightings / photos / ratings) ----------
 // Reads/writes Supabase once signed in (same "shared source of truth" model
 // as species/sites); falls back to on-device storage when signed out. Query
 // keys include the user id so signing in/out/switching accounts refetches
@@ -64,32 +64,34 @@ export function useFinds() {
   return useQuery({ queryKey: ['finds', user?.id ?? 'local'], queryFn: progress.getFinds });
 }
 
-export function useIsFound(speciesId: string | undefined) {
+export function useSightingsForSpecies(speciesId: string | undefined) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['finds', user?.id ?? 'local', speciesId],
-    queryFn: () => progress.isFound(speciesId!),
+    queryKey: ['sightings', user?.id ?? 'local', speciesId],
+    queryFn: () => progress.getSightingsForSpecies(speciesId!),
     enabled: Boolean(speciesId),
   });
 }
 
-export function useMarkFound() {
+export function useSetSightingCount() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: ({ speciesId, siteId, notes }: { speciesId: string; siteId?: string; notes?: string }) =>
-      progress.markFound(speciesId, siteId, notes),
-    onSuccess: () => {
+    mutationFn: ({ speciesId, siteId, count }: { speciesId: string; siteId: string; count: number }) =>
+      progress.setSightingCount(speciesId, siteId, count),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sightings', user?.id ?? 'local', variables.speciesId] });
       queryClient.invalidateQueries({ queryKey: ['finds', user?.id ?? 'local'] });
     },
   });
 }
 
-export function useUserPhotos(speciesId: string | undefined) {
+export function useUserPhotos(target: { speciesId?: string; siteId?: string }) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['user-photos', user?.id ?? 'local', speciesId],
-    queryFn: () => progress.getUserPhotos(speciesId),
+    queryKey: ['user-photos', user?.id ?? 'local', target.speciesId ?? null, target.siteId ?? null],
+    queryFn: () => progress.getUserPhotos(target),
+    enabled: Boolean(target.speciesId || target.siteId),
   });
 }
 
@@ -97,9 +99,11 @@ export function useAddUserPhoto() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: ({ speciesId, uri }: { speciesId: string; uri: string }) => progress.addUserPhoto(speciesId, uri),
+    mutationFn: (target: { speciesId?: string; siteId?: string; uri: string }) => progress.addUserPhoto(target),
     onSuccess: (photo) => {
-      queryClient.invalidateQueries({ queryKey: ['user-photos', user?.id ?? 'local', photo.speciesId] });
+      queryClient.invalidateQueries({
+        queryKey: ['user-photos', user?.id ?? 'local', photo.speciesId ?? null, photo.siteId ?? null],
+      });
     },
   });
 }

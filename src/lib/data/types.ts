@@ -40,16 +40,25 @@ export interface SiteSpeciesLink {
   frequency: string;
 }
 
+/** A per-site tally: how many of this species the user has seen at one site. */
+export interface Sighting {
+  speciesId: string;
+  siteId: string;
+  count: number;
+  updatedAt: string;
+}
+
+/** Aggregate across all of a species' sightings -- drives the Dex lock/unlock and Collection list. */
 export interface Find {
   speciesId: string;
-  siteId?: string;
-  notes?: string;
+  totalCount: number;
   firstFoundAt: string;
 }
 
 export interface UserPhoto {
   id: string;
-  speciesId: string;
+  speciesId?: string;
+  siteId?: string;
   uri: string;
   takenAt: string;
 }
