@@ -41,7 +41,7 @@ function AppShell() {
   const [hasSkipped, setHasSkipped] = useState(false);
 
   // While the session check resolves, render nothing rather than the tabs --
-  // otherwise the Dex would flash briefly before swapping to the sign-in
+  // otherwise the Fish tab would flash briefly before swapping to the sign-in
   // gate, undercutting the "sign in first" intent.
   if (isSupabaseConfigured && isLoading) {
     return null;

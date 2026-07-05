@@ -52,7 +52,7 @@ export interface Sighting {
   updatedAt: string;
 }
 
-/** Aggregate across all of a species' sightings -- drives the Dex lock/unlock and Collection list. */
+/** Aggregate across all of a species' sightings -- drives the Fish tab lock/unlock and Collection list. */
 export interface Find {
   speciesId: string;
   totalCount: number;

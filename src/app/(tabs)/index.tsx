@@ -64,7 +64,7 @@ function CreatureCard({ species, found }: { species: Species; found: boolean }) 
   );
 }
 
-export default function DexScreen() {
+export default function FishScreen() {
   const { data: species, isLoading } = useSpeciesList();
   const { data: finds } = useFinds();
   const [groupFilter, setGroupFilter] = useState<string>(ALL);
@@ -90,7 +90,7 @@ export default function DexScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
-          <ThemedText type="title">Dex</ThemedText>
+          <ThemedText type="title">Fish</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {foundIds.size}/{species?.length ?? 0} found
           </ThemedText>

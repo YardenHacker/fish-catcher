@@ -84,7 +84,7 @@ export default function CollectionScreen() {
               {found.length === 0 ? (
                 <ThemedView type="backgroundElement" style={styles.emptyState}>
                   <ThemedText type="default" themeColor="textSecondary" style={styles.emptyText}>
-                    No finds yet — head to the Dex and start exploring the reefs of Sharm el Sheikh!
+                    No finds yet — head to the Fish tab and start exploring the reefs of Sharm el Sheikh!
                   </ThemedText>
                 </ThemedView>
               ) : (

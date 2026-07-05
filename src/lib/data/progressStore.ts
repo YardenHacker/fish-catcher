@@ -47,7 +47,7 @@ function mapRatingRow(row: any): SiteRating {
 
 // ---------- Sightings (per species, per site, with a count) ----------
 // Presence of a row = seen there; a species' total across all its rows
-// drives the Dex lock/unlock and the Collection list/score.
+// drives the Fish tab lock/unlock and the Collection list/score.
 
 interface LocalSighting extends Sighting {
   createdAt: string;
