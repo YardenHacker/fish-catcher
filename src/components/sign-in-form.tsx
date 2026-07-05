@@ -8,34 +8,20 @@ import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth/AuthProvider';
 
 export function SignInForm() {
-  const { requestOtp, verifyOtp } = useAuth();
+  const { signIn, signUp } = useAuth();
   const theme = useTheme();
 
+  const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
-  async function handleSendCode() {
-    if (!email.trim()) return;
+  async function handleSubmit() {
+    if (!email.trim() || !password) return;
     setIsBusy(true);
     setMessage(null);
-    const { error } = await requestOtp(email.trim());
-    setIsBusy(false);
-    if (error) {
-      setMessage(error);
-      return;
-    }
-    setStep('code');
-    setMessage(`Check ${email.trim()} for a 6-digit code.`);
-  }
-
-  async function handleVerifyCode() {
-    if (!code.trim()) return;
-    setIsBusy(true);
-    setMessage(null);
-    const { error } = await verifyOtp(email.trim(), code.trim());
+    const { error } = await (mode === 'signIn' ? signIn(email.trim(), password) : signUp(email.trim(), password));
     setIsBusy(false);
     if (error) setMessage(error);
   }
@@ -47,53 +33,42 @@ export function SignInForm() {
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
-      <ThemedText type="default">Sign in to sync your finds, photos, and ratings across devices.</ThemedText>
+      <ThemedText type="default">
+        {mode === 'signIn'
+          ? 'Sign in to sync your finds, photos, and ratings across devices.'
+          : 'Create an account to sync your finds, photos, and ratings across devices.'}
+      </ThemedText>
 
-      {step === 'email' ? (
-        <>
-          <TextInput
-            style={inputStyle}
-            placeholder="you@example.com"
-            placeholderTextColor={theme.textSecondary}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <Pressable
-            style={[styles.primaryButton, { backgroundColor: theme.accent }]}
-            onPress={handleSendCode}
-            disabled={isBusy}>
-            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
-              {isBusy ? 'Sending…' : 'Send code'}
-            </ThemedText>
-          </Pressable>
-        </>
-      ) : (
-        <>
-          <TextInput
-            style={inputStyle}
-            placeholder="6-digit code"
-            placeholderTextColor={theme.textSecondary}
-            keyboardType="number-pad"
-            value={code}
-            onChangeText={setCode}
-          />
-          <Pressable
-            style={[styles.primaryButton, { backgroundColor: theme.accent }]}
-            onPress={handleVerifyCode}
-            disabled={isBusy}>
-            <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
-              {isBusy ? 'Verifying…' : 'Verify & sign in'}
-            </ThemedText>
-          </Pressable>
-          <Pressable onPress={() => setStep('email')}>
-            <ThemedText type="link" themeColor="textSecondary">
-              Use a different email
-            </ThemedText>
-          </Pressable>
-        </>
-      )}
+      <TextInput
+        style={inputStyle}
+        placeholder="you@example.com"
+        placeholderTextColor={theme.textSecondary}
+        autoCapitalize="none"
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
+      />
+      <TextInput
+        style={inputStyle}
+        placeholder="Password"
+        placeholderTextColor={theme.textSecondary}
+        secureTextEntry
+        autoCapitalize="none"
+        value={password}
+        onChangeText={setPassword}
+      />
+
+      <Pressable style={[styles.primaryButton, { backgroundColor: theme.accent }]} onPress={handleSubmit} disabled={isBusy}>
+        <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
+          {isBusy ? 'Please wait…' : mode === 'signIn' ? 'Sign in' : 'Create account'}
+        </ThemedText>
+      </Pressable>
+
+      <Pressable onPress={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')}>
+        <ThemedText type="link" themeColor="textSecondary">
+          {mode === 'signIn' ? "Don't have an account? Create one" : 'Already have an account? Sign in'}
+        </ThemedText>
+      </Pressable>
 
       {message && (
         <ThemedText type="small" themeColor="textSecondary">
