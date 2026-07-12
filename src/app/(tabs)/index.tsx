@@ -24,6 +24,16 @@ import {
 import { useActiveRegion } from '@/lib/region-context';
 
 const ALL = 'All';
+const SEASON_OPTIONS = ['Summer', 'Year-round'];
+
+// Most of the catalog has no bestSeason set at all (year-round residents --
+// only genuinely seasonal visitors get a specific season string). Both a
+// missing value and an explicit "Year-round (...)" string count as the
+// same "Year-round" bucket.
+function seasonBucket(bestSeason: string | undefined): string {
+  if (bestSeason && bestSeason.startsWith('Summer')) return 'Summer';
+  return 'Year-round';
+}
 
 function ProgressReadout({ found, total }: { found: number; total: number }) {
   const theme = useTheme();
@@ -115,6 +125,7 @@ export default function FishScreen() {
   const [groupFilter, setGroupFilter] = useState<string>(ALL);
   const [rarityFilter, setRarityFilter] = useState<string>(ALL);
   const [siteFilter, setSiteFilter] = useState<string>(ALL);
+  const [seasonFilter, setSeasonFilter] = useState<string>(ALL);
 
   // A site chosen under one region has no meaning under another -- reset the
   // site filter (back to "All sites") whenever the active region changes, so
@@ -145,9 +156,13 @@ export default function FishScreen() {
     return baseList.filter((s) => {
       if (groupFilter !== ALL && s.group !== groupFilter) return false;
       if (rarityFilter !== ALL && s.rarityTier !== rarityFilter) return false;
+      // A year-round species is also catchable in summer, so it counts
+      // toward either season filter -- only the "Year-round" filter itself
+      // excludes summer-only specialties.
+      if (seasonFilter === 'Year-round' && seasonBucket(s.bestSeason) !== 'Year-round') return false;
       return true;
     });
-  }, [baseList, groupFilter, rarityFilter]);
+  }, [baseList, groupFilter, rarityFilter, seasonFilter]);
 
   const gridLoading = isLoading || (siteFilter !== ALL && isSiteSpeciesLoading);
 
@@ -209,6 +224,17 @@ export default function FishScreen() {
                   <FilterChip label={label} selected={siteFilter === value} onPress={() => setSiteFilter(value)} />
                 );
               }}
+              style={styles.chipList}
+            />
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={[ALL, ...SEASON_OPTIONS]}
+              keyExtractor={(item) => `season-${item}`}
+              contentContainerStyle={styles.chipRow}
+              renderItem={({ item }) => (
+                <FilterChip label={item} selected={seasonFilter === item} onPress={() => setSeasonFilter(item)} />
+              )}
               style={styles.chipList}
             />
 

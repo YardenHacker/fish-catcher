@@ -79,13 +79,16 @@ export async function getSpecies(): Promise<Species[]> {
   return MOCK_SPECIES;
 }
 
-export async function getSpeciesBySlug(slug: string): Promise<Species | undefined> {
+// Returns `null` (never `undefined`) when nothing matches -- React Query
+// throws "Query data cannot be undefined" if a queryFn resolves to
+// undefined, and useSpecies/useSite pass this straight through as queryFn.
+export async function getSpeciesBySlug(slug: string): Promise<Species | null> {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase.from('species').select('*').eq('slug', slug).maybeSingle();
     if (error) throw error;
-    return data ? mapSpeciesRow(data) : undefined;
+    return data ? mapSpeciesRow(data) : null;
   }
-  return MOCK_SPECIES.find((s) => s.slug === slug);
+  return MOCK_SPECIES.find((s) => s.slug === slug) ?? null;
 }
 
 export async function getSites(): Promise<DiveSite[]> {
@@ -97,13 +100,13 @@ export async function getSites(): Promise<DiveSite[]> {
   return MOCK_SITES;
 }
 
-export async function getSiteBySlug(slug: string): Promise<DiveSite | undefined> {
+export async function getSiteBySlug(slug: string): Promise<DiveSite | null> {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase.from('sites').select('*').eq('slug', slug).maybeSingle();
     if (error) throw error;
-    return data ? mapSiteRow(data) : undefined;
+    return data ? mapSiteRow(data) : null;
   }
-  return MOCK_SITES.find((s) => s.slug === slug);
+  return MOCK_SITES.find((s) => s.slug === slug) ?? null;
 }
 
 export async function getSpeciesForSite(siteSlug: string): Promise<Species[]> {

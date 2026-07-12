@@ -1,17 +1,50 @@
 import { Link } from 'expo-router';
-import { Fragment } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Fragment, useMemo, useState } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useSitesForRegion } from '@/lib/data';
 import type { DiveSite } from '@/lib/data';
 import { useActiveRegion } from '@/lib/region-context';
 
-const AREA_ORDER = ['Ras Mohammed', 'Straits of Tiran', 'Sharm Local'];
+const ALL = 'All';
+const DIFFICULTY_ORDER = ['Beginner', 'Intermediate', 'Advanced'];
+
+// Preferred display order per area -- areas not listed here (there
+// shouldn't be many) just fall in after these, in first-seen order.
+const AREA_ORDER = [
+  'Ras Mohammed',
+  'Straits of Tiran',
+  'Sharm Local',
+  'Offshore Wrecks',
+  'North Eilat',
+  'Dolphin Reef / Katza',
+  'Coral Beach Nature Reserve',
+];
+
+function FilterChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.chip,
+        {
+          backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement,
+          borderColor: selected ? theme.accent : theme.border,
+        },
+      ]}>
+      <ThemedText type="mono" themeColor={selected ? 'text' : 'textSecondary'}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
 
 function groupSitesByArea(sites: DiveSite[]): Array<{ area: string; sites: DiveSite[] }> {
   const groups = new Map<string, DiveSite[]>();
@@ -61,7 +94,15 @@ function SiteRow({ site }: { site: DiveSite }) {
 export default function SitesScreen() {
   const activeRegion = useActiveRegion();
   const { data: sites, isLoading } = useSitesForRegion(activeRegion?.slug);
-  const groups = groupSitesByArea(sites ?? []);
+  const [difficultyFilter, setDifficultyFilter] = useState<string>(ALL);
+
+  const filteredSites = useMemo(() => {
+    if (!sites) return [];
+    if (difficultyFilter === ALL) return sites;
+    return sites.filter((s) => s.difficulty === difficultyFilter);
+  }, [sites, difficultyFilter]);
+
+  const groups = groupSitesByArea(filteredSites);
 
   return (
     <ThemedView style={styles.container}>
@@ -71,6 +112,24 @@ export default function SitesScreen() {
             <ThemedText type="title">Dive Sites</ThemedText>
             <RegionSwitcher />
 
+            {!isLoading && (
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={[ALL, ...DIFFICULTY_ORDER]}
+                keyExtractor={(item) => `difficulty-${item}`}
+                contentContainerStyle={styles.chipRow}
+                renderItem={({ item }) => (
+                  <FilterChip
+                    label={item}
+                    selected={difficultyFilter === item}
+                    onPress={() => setDifficultyFilter(item)}
+                  />
+                )}
+                style={styles.chipList}
+              />
+            )}
+
             {isLoading && (
               <ThemedText type="small" themeColor="textSecondary">
                 Loading dive sites…
@@ -79,7 +138,7 @@ export default function SitesScreen() {
 
             {!isLoading && groups.length === 0 && (
               <ThemedText type="small" themeColor="textSecondary">
-                No dive sites found.
+                No dive sites match this filter.
               </ThemedText>
             )}
 
@@ -113,6 +172,14 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     padding: Spacing.four,
     gap: Spacing.three,
+  },
+  chipList: { flexGrow: 0 },
+  chipRow: { gap: Spacing.two, paddingVertical: Spacing.one },
+  chip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
   },
   areaHeader: {
     fontSize: 22,
