@@ -233,6 +233,15 @@ export default function SiteDetailScreen() {
 
             <ThemedText type="default">{site.description}</ThemedText>
 
+            {site.proTip && (
+              <View style={[styles.proTipBlock, { borderColor: theme.accent, backgroundColor: theme.backgroundElement }]}>
+                <ThemedText type="mono" style={{ color: theme.accent }}>
+                  PRO TIP
+                </ThemedText>
+                <ThemedText type="default">{site.proTip}</ThemedText>
+              </View>
+            )}
+
             <ThemedText type="subtitle" style={styles.sectionHeader}>
               Fish I've seen here
             </ThemedText>
@@ -358,6 +367,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
     marginTop: Spacing.two,
+  },
+  proTipBlock: {
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    padding: Spacing.three,
+    gap: Spacing.one,
   },
   rarityDot: {
     width: 12,

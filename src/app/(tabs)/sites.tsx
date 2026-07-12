@@ -3,11 +3,13 @@ import { Fragment } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { useSites } from '@/lib/data';
+import { useSitesForRegion } from '@/lib/data';
 import type { DiveSite } from '@/lib/data';
+import { useActiveRegion } from '@/lib/region-context';
 
 const AREA_ORDER = ['Ras Mohammed', 'Straits of Tiran', 'Sharm Local'];
 
@@ -57,7 +59,8 @@ function SiteRow({ site }: { site: DiveSite }) {
 }
 
 export default function SitesScreen() {
-  const { data: sites, isLoading } = useSites();
+  const activeRegion = useActiveRegion();
+  const { data: sites, isLoading } = useSitesForRegion(activeRegion?.slug);
   const groups = groupSitesByArea(sites ?? []);
 
   return (
@@ -66,6 +69,7 @@ export default function SitesScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
             <ThemedText type="title">Dive Sites</ThemedText>
+            <RegionSwitcher />
 
             {isLoading && (
               <ThemedText type="small" themeColor="textSecondary">

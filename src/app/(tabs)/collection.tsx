@@ -7,18 +7,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CornerFrame } from '@/components/corner-frame';
 import { RarityTag } from '@/components/rarity-tag';
+import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useFinds, useSpeciesList, useUserPhotos, RARITY_TIER_COLOR, RARITY_TIER_ORDER } from '@/lib/data';
+import { useFinds, useSpeciesForRegion, useUserPhotos, RARITY_TIER_COLOR, RARITY_TIER_ORDER } from '@/lib/data';
 import type { RarityTier, Species } from '@/lib/data';
+import { useActiveRegion } from '@/lib/region-context';
 
 type FoundSpecies = Species & { firstFoundAt: string };
 
 export default function CollectionScreen() {
   const theme = useTheme();
-  const { data: species, isLoading: speciesLoading } = useSpeciesList();
+  const activeRegion = useActiveRegion();
+  const { data: species, isLoading: speciesLoading } = useSpeciesForRegion(activeRegion?.slug);
   const { data: finds, isLoading: findsLoading } = useFinds();
 
   const isLoading = speciesLoading || findsLoading;
@@ -60,6 +63,7 @@ export default function CollectionScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <ThemedText type="title">My Collection</ThemedText>
+          <RegionSwitcher />
 
           {isLoading ? (
             <ThemedText type="default" themeColor="textSecondary" style={styles.loading}>
@@ -95,7 +99,8 @@ export default function CollectionScreen() {
               {found.length === 0 ? (
                 <ThemedView type="backgroundElement" style={styles.emptyState}>
                   <ThemedText type="default" themeColor="textSecondary" style={styles.emptyText}>
-                    No finds yet — head to the Fish tab and start exploring the reefs of Sharm el Sheikh!
+                    No finds yet — head to the Fish tab and start exploring the reefs of{' '}
+                    {activeRegion?.name ?? 'this region'}!
                   </ThemedText>
                 </ThemedView>
               ) : (

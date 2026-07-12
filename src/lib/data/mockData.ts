@@ -1,7 +1,7 @@
 import seed from '../../../supabase/seed/species_seed.json';
 
 import { computeRarityScore } from './rarity';
-import { DiveSite, RarityTier, SiteSpeciesLink, Species } from './types';
+import { DiveSite, Region, RarityTier, SiteSpeciesLink, Species } from './types';
 
 function slugify(name: string): string {
   return name
@@ -39,8 +39,19 @@ interface SeedSite {
   description: string;
 }
 
+interface SeedRegion {
+  name: string;
+  slug: string;
+}
+
 const seedSpecies = seed.species as SeedSpecies[];
 const seedSites = seed.sites as SeedSite[];
+const seedRegion = seed.region as SeedRegion;
+
+// The mock/offline fallback only ever has one region's worth of data bundled
+// (whatever's in species_seed.json), so its id can just be the slug -- same
+// convention MOCK_SITES/MOCK_SPECIES already use for ids below.
+export const MOCK_REGIONS: Region[] = [{ id: seedRegion.slug, slug: seedRegion.slug, name: seedRegion.name }];
 
 export const MOCK_SITES: DiveSite[] = seedSites.map((s) => ({
   id: s.slug,
@@ -54,6 +65,7 @@ export const MOCK_SITES: DiveSite[] = seedSites.map((s) => ({
   depthMax: s.depth_max,
   difficulty: s.difficulty,
   description: s.description,
+  regionId: seedRegion.slug,
 }));
 
 export const MOCK_SPECIES: Species[] = seedSpecies.map((s) => {

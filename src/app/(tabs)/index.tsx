@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Link } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CornerFrame } from '@/components/corner-frame';
 import { RarityTag } from '@/components/rarity-tag';
+import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -16,10 +17,11 @@ import {
   RARITY_TIER_ORDER,
   Species,
   useFinds,
-  useSites,
+  useSitesForRegion,
+  useSpeciesForRegion,
   useSpeciesForSite,
-  useSpeciesList,
 } from '@/lib/data';
+import { useActiveRegion } from '@/lib/region-context';
 
 const ALL = 'All';
 
@@ -106,12 +108,21 @@ function CreatureCard({ species, found }: { species: Species; found: boolean }) 
 }
 
 export default function FishScreen() {
-  const { data: species, isLoading } = useSpeciesList();
-  const { data: sites } = useSites();
+  const activeRegion = useActiveRegion();
+  const { data: species, isLoading } = useSpeciesForRegion(activeRegion?.slug);
+  const { data: sites } = useSitesForRegion(activeRegion?.slug);
   const { data: finds } = useFinds();
   const [groupFilter, setGroupFilter] = useState<string>(ALL);
   const [rarityFilter, setRarityFilter] = useState<string>(ALL);
   const [siteFilter, setSiteFilter] = useState<string>(ALL);
+
+  // A site chosen under one region has no meaning under another -- reset the
+  // site filter (back to "All sites") whenever the active region changes, so
+  // switching regions can never leave the grid silently filtered to a site
+  // that's no longer even shown in the chip row above.
+  useEffect(() => {
+    setSiteFilter(ALL);
+  }, [activeRegion?.id]);
 
   // siteFilter holds a site slug (or ALL). Only fetched when a site is
   // actually selected -- useSpeciesForSite is disabled (via `enabled`) while
@@ -145,6 +156,7 @@ export default function FishScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <ThemedText type="title">Fish</ThemedText>
+          <RegionSwitcher />
           {/* Progress stays scoped to the whole catalog rather than the
               filtered set -- "found" is a personal, permanent milestone
               (species you've ever logged), and re-scoping it to whatever
