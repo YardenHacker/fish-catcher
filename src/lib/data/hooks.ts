@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider';
 
 import * as progress from './progressStore';
 import * as repo from './repository';
+import type { MediaType } from './types';
 
 // ---------- Content (species / sites) ----------
 // Read-mostly, cached indefinitely by TanStack Query so the dex/sites work
@@ -127,10 +128,32 @@ export function useAddUserPhoto() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: (target: { speciesId?: string; siteId?: string; uri: string }) => progress.addUserPhoto(target),
+    mutationFn: (target: {
+      speciesId?: string;
+      siteId?: string;
+      uri: string;
+      mediaType: MediaType;
+      mimeType?: string | null;
+      fileName?: string | null;
+    }) => progress.addUserPhoto(target),
     onSuccess: (photo) => {
       queryClient.invalidateQueries({
         queryKey: ['user-photos', user?.id ?? 'local', photo.speciesId ?? null, photo.siteId ?? null],
+      });
+    },
+  });
+}
+
+/** Deletes a photo/video the user uploaded -- see progressStore.deleteUserPhoto for the storage + row cleanup. */
+export function useDeleteUserPhoto() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: ({ photoId, storagePath }: { photoId: string; storagePath?: string; speciesId?: string; siteId?: string }) =>
+      progress.deleteUserPhoto(photoId, storagePath),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['user-photos', user?.id ?? 'local', variables.speciesId ?? null, variables.siteId ?? null],
       });
     },
   });

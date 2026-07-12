@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { isSupabaseConfigured, supabase } from '../supabase';
 
-import { Find, Sighting, SiteRating, UserPhoto } from './types';
+import { Find, MediaType, Sighting, SiteRating, UserPhoto } from './types';
 
 const KEYS = {
   sightings: 'reefdex.sightings',
@@ -214,6 +214,40 @@ export async function getFinds(): Promise<Find[]> {
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
+// Common mime types the pickers/cameras hand back -> file extension.
+// Used only for the storage object's file name; the `contentType` set on
+// upload (below) is what actually determines how it's served/decoded.
+const MIME_EXTENSION_MAP: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'video/3gpp': '3gp',
+};
+
+function deriveExtension(mediaType: MediaType, mimeType?: string | null, fileName?: string | null): string {
+  if (mimeType && MIME_EXTENSION_MAP[mimeType]) return MIME_EXTENSION_MAP[mimeType];
+  if (fileName) {
+    const match = /\.([a-zA-Z0-9]+)$/.exec(fileName);
+    if (match) return match[1].toLowerCase();
+  }
+  if (mimeType) {
+    const subtype = mimeType.split('/')[1]?.split(';')[0];
+    if (subtype) return subtype.toLowerCase();
+  }
+  return mediaType === 'video' ? 'mp4' : 'jpg';
+}
+
+function resolveContentType(mediaType: MediaType, mimeType?: string | null): string {
+  if (mimeType) return mimeType;
+  return mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+}
+
 export async function getUserPhotos(target: { speciesId?: string; siteId?: string }): Promise<UserPhoto[]> {
   const userId = await getUserId();
   if (userId && supabase) {
@@ -234,6 +268,8 @@ export async function getUserPhotos(target: { speciesId?: string; siteId?: strin
           speciesId: row.species_id ?? undefined,
           siteId: row.site_id ?? undefined,
           uri: signedUrl?.signedUrl ?? '',
+          mediaType: (row.media_type as MediaType | null) ?? 'photo',
+          storagePath: row.storage_path,
           takenAt: row.taken_at ?? row.created_at,
         };
       }),
@@ -242,36 +278,52 @@ export async function getUserPhotos(target: { speciesId?: string; siteId?: strin
   }
 
   const photos = await readJson<UserPhoto[]>(KEYS.photos, []);
-  return photos.filter((p) => {
-    if (target.speciesId && p.speciesId !== target.speciesId) return false;
-    if (target.siteId && p.siteId !== target.siteId) return false;
-    return true;
-  });
+  return photos
+    .filter((p) => {
+      if (target.speciesId && p.speciesId !== target.speciesId) return false;
+      if (target.siteId && p.siteId !== target.siteId) return false;
+      return true;
+    })
+    .map((p) => ({ ...p, mediaType: p.mediaType ?? 'photo' }));
 }
 
-export async function addUserPhoto(target: { speciesId?: string; siteId?: string; uri: string }): Promise<UserPhoto> {
-  const { speciesId, siteId, uri } = target;
+export async function addUserPhoto(target: {
+  speciesId?: string;
+  siteId?: string;
+  uri: string;
+  mediaType: MediaType;
+  mimeType?: string | null;
+  fileName?: string | null;
+}): Promise<UserPhoto> {
+  const { speciesId, siteId, uri, mediaType, mimeType, fileName } = target;
   const userId = await getUserId();
+  const contentType = resolveContentType(mediaType, mimeType);
 
   if (userId && supabase) {
-    const path = `${userId}/${speciesId ?? `site-${siteId}`}-${Date.now()}.jpg`;
+    const extension = deriveExtension(mediaType, mimeType, fileName);
+    const path = `${userId}/${speciesId ?? `site-${siteId}`}-${Date.now()}.${extension}`;
     const response = await fetch(uri);
     const blob = await response.blob();
-    const { error: uploadError } = await supabase.storage
-      .from('user-photos')
-      .upload(path, blob, { contentType: 'image/jpeg' });
+    const { error: uploadError } = await supabase.storage.from('user-photos').upload(path, blob, { contentType });
     if (uploadError) throw uploadError;
 
     const takenAt = new Date().toISOString();
     const { data, error } = await supabase
       .from('user_photos')
-      .insert({ user_id: userId, species_id: speciesId ?? null, site_id: siteId ?? null, storage_path: path, taken_at: takenAt })
+      .insert({
+        user_id: userId,
+        species_id: speciesId ?? null,
+        site_id: siteId ?? null,
+        storage_path: path,
+        taken_at: takenAt,
+        media_type: mediaType,
+      })
       .select()
       .single();
     if (error) throw error;
 
     const { data: signedUrl } = await supabase.storage.from('user-photos').createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-    return { id: data.id, speciesId, siteId, uri: signedUrl?.signedUrl ?? uri, takenAt };
+    return { id: data.id, speciesId, siteId, uri: signedUrl?.signedUrl ?? uri, mediaType, storagePath: path, takenAt };
   }
 
   const photos = await readJson<UserPhoto[]>(KEYS.photos, []);
@@ -280,10 +332,45 @@ export async function addUserPhoto(target: { speciesId?: string; siteId?: string
     speciesId,
     siteId,
     uri,
+    mediaType,
     takenAt: new Date().toISOString(),
   };
   await writeJson(KEYS.photos, [...photos, photo]);
   return photo;
+}
+
+/** Deletes both the Supabase Storage object and the `user_photos` row (or, offline, the local entry). */
+export async function deleteUserPhoto(photoId: string, storagePath?: string): Promise<void> {
+  const userId = await getUserId();
+
+  if (userId && supabase) {
+    let path = storagePath;
+    if (!path) {
+      const { data, error } = await supabase
+        .from('user_photos')
+        .select('storage_path')
+        .eq('id', photoId)
+        .eq('user_id', userId)
+        .single();
+      if (error) throw error;
+      path = data?.storage_path ?? undefined;
+    }
+
+    if (path) {
+      const { error: removeError } = await supabase.storage.from('user-photos').remove([path]);
+      if (removeError) throw removeError;
+    }
+
+    const { error } = await supabase.from('user_photos').delete().eq('id', photoId).eq('user_id', userId);
+    if (error) throw error;
+    return;
+  }
+
+  const photos = await readJson<UserPhoto[]>(KEYS.photos, []);
+  await writeJson(
+    KEYS.photos,
+    photos.filter((p) => p.id !== photoId),
+  );
 }
 
 // ---------- Site ratings ----------

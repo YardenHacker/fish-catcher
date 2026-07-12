@@ -63,11 +63,17 @@ export interface Find {
   firstFoundAt: string;
 }
 
+export type MediaType = 'photo' | 'video';
+
 export interface UserPhoto {
   id: string;
   speciesId?: string;
   siteId?: string;
   uri: string;
+  /** Every row has one -- old rows default to 'photo' (see migration 0005). */
+  mediaType: MediaType;
+  /** Supabase Storage object path (bucket `user-photos`); absent for the offline/local fallback. Needed to delete the underlying file. */
+  storagePath?: string;
   takenAt: string;
 }
 

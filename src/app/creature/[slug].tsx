@@ -11,6 +11,7 @@ import { ExternalLink } from '@/components/external-link';
 import { RarityTag } from '@/components/rarity-tag';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { UserMediaThumbnail } from '@/components/user-media-thumbnail';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -80,7 +81,7 @@ function AreaGroup({
               {checked && (
                 <Pressable onPress={() => onAddPhotoForSite(site.id)} style={styles.inlineAddPhoto}>
                   <ThemedText type="small" themeColor="accent">
-                    + Add photo from {site.name}
+                    + Add photo/video from {site.name}
                   </ThemedText>
                 </Pressable>
               )}
@@ -169,9 +170,18 @@ export default function CreatureDetailScreen() {
       setPickerMessage('Photo library permission was denied.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
-      addUserPhoto.mutate({ speciesId: species.id, siteId, uri: result.assets[0].uri });
+      const asset = result.assets[0];
+      const mediaType = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'photo';
+      addUserPhoto.mutate({
+        speciesId: species.id,
+        siteId,
+        uri: asset.uri,
+        mediaType,
+        mimeType: asset.mimeType,
+        fileName: asset.fileName,
+      });
     }
   }
 
@@ -322,7 +332,7 @@ export default function CreatureDetailScreen() {
                 <View style={styles.photoRow}>
                   {userPhotos.map((photo) => (
                     <View key={photo.id} style={styles.photoWithCaption}>
-                      <Image source={{ uri: photo.uri }} style={styles.thumbnail} contentFit="cover" />
+                      <UserMediaThumbnail photo={photo} style={styles.thumbnail} />
                       <ThemedText type="small" themeColor="textSecondary">
                         {photo.siteId ? (siteNameById.get(photo.siteId) ?? 'Dive site') : 'General'}
                       </ThemedText>
@@ -338,7 +348,7 @@ export default function CreatureDetailScreen() {
             <Pressable
               onPress={() => pickAndUploadPhoto()}
               style={[styles.addPhotoButton, { borderColor: theme.textSecondary }]}>
-              <ThemedText type="smallBold">Add your photo</ThemedText>
+              <ThemedText type="smallBold">Add your photo or video</ThemedText>
             </Pressable>
             {pickerMessage && (
               <ThemedText type="small" themeColor="textSecondary">
