@@ -5,13 +5,26 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
+import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useSites } from '@/lib/data';
+import { useSitesForRegion } from '@/lib/data';
+import { useActiveRegion } from '@/lib/region-context';
 
+// Sharm el Sheikh's default center/zoom, preserved exactly as-is for existing
+// users. Any other region (including one with zero sites so far) centers on
+// the average lat/lng of its own sites instead -- see computeMapCenter.
+const SHARM_SLUG = 'sharm-el-sheikh';
 const DEFAULT_CENTER: [number, number] = [27.87, 34.35];
 const DEFAULT_ZOOM = 10;
+
+function computeMapCenter(sites: { lat: number; lng: number }[], regionSlug: string | undefined): [number, number] {
+  if (regionSlug === SHARM_SLUG || sites.length === 0) return DEFAULT_CENTER;
+  const avgLat = sites.reduce((sum, s) => sum + s.lat, 0) / sites.length;
+  const avgLng = sites.reduce((sum, s) => sum + s.lng, 0) / sites.length;
+  return [avgLat, avgLng];
+}
 
 type UserLocation = { latitude: number; longitude: number } | null;
 
@@ -29,7 +42,11 @@ const AREA_COLORS: Record<string, string> = {
 };
 const DEFAULT_AREA_COLOR = '#6b7785';
 
-function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: number; area: string }[], userLocation: UserLocation) {
+function buildMapHtml(
+  sites: { slug: string; name: string; lat: number; lng: number; area: string }[],
+  userLocation: UserLocation,
+  center: [number, number],
+) {
   const sitesJson = JSON.stringify(sites);
   const userLocationJson = JSON.stringify(userLocation);
   const areaColorsJson = JSON.stringify(AREA_COLORS);
@@ -85,7 +102,7 @@ function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: num
       var AREA_COLORS = ${areaColorsJson};
       var DEFAULT_AREA_COLOR = '${DEFAULT_AREA_COLOR}';
 
-      var map = L.map('map').setView([${DEFAULT_CENTER[0]}, ${DEFAULT_CENTER[1]}], ${DEFAULT_ZOOM});
+      var map = L.map('map').setView([${center[0]}, ${center[1]}], ${DEFAULT_ZOOM});
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         maxZoom: 20,
@@ -168,7 +185,8 @@ function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: num
 }
 
 export default function MapScreen() {
-  const { data: sites, isLoading: sitesLoading } = useSites();
+  const activeRegion = useActiveRegion();
+  const { data: sites, isLoading: sitesLoading } = useSitesForRegion(activeRegion?.slug);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [locationLoading, setLocationLoading] = useState(true);
@@ -204,7 +222,8 @@ export default function MapScreen() {
     };
   }, []);
 
-  const html = useMemo(() => buildMapHtml(sites ?? [], userLocation), [sites, userLocation]);
+  const center = useMemo(() => computeMapCenter(sites ?? [], activeRegion?.slug), [sites, activeRegion?.slug]);
+  const html = useMemo(() => buildMapHtml(sites ?? [], userLocation, center), [sites, userLocation, center]);
 
   const handleMessage = (event: WebViewMessageEvent) => {
     const slug = event.nativeEvent.data;
@@ -221,6 +240,7 @@ export default function MapScreen() {
         <ThemedText type="title" style={styles.title}>
           Dive Map
         </ThemedText>
+        <RegionSwitcher />
 
         {locationDenied && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.message}>

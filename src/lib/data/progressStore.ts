@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { isSupabaseConfigured, supabase } from '../supabase';
 
+import * as repo from './repository';
 import { Find, MediaType, Sighting, SiteRating, UserPhoto } from './types';
 
 const KEYS = {
@@ -180,7 +181,23 @@ export async function setSightingCount(speciesId: string, siteId: string, count:
   await writeJson(KEYS.sightings, all);
 }
 
-export async function getFinds(): Promise<Find[]> {
+/**
+ * Resolves the id every "belongs to no explicit region yet" record should be
+ * treated as -- the same default a fresh RegionProvider picks (prefer Sharm el
+ * Sheikh, else the first region alphabetically). Used both for legacy local
+ * photos (never stamped with a regionId) and can't otherwise be reasoned about.
+ */
+async function resolveDefaultRegionId(): Promise<string | undefined> {
+  const regions = await repo.getRegions();
+  return repo.pickDefaultRegion(regions)?.id;
+}
+
+/**
+ * Aggregate finds, scoped to one region: a sighting counts only if it was
+ * logged at a site belonging to `regionId`. This is what keeps the Fish
+ * tab/Collection's "found" state completely isolated between regions.
+ */
+export async function getFinds(regionId: string): Promise<Find[]> {
   const userId = await getUserId();
   const bySpecies = new Map<string, { total: number; firstFoundAt: string }>();
 
@@ -195,12 +212,25 @@ export async function getFinds(): Promise<Find[]> {
   }
 
   if (userId && supabase) {
-    const { data, error } = await supabase.from('sightings').select('species_id, count, created_at').eq('user_id', userId);
+    const { data: siteRows, error: siteError } = await supabase.from('sites').select('id').eq('region_id', regionId);
+    if (siteError) throw siteError;
+    const siteIds = (siteRows ?? []).map((row: any) => row.id);
+    if (siteIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('sightings')
+      .select('species_id, count, created_at')
+      .eq('user_id', userId)
+      .in('site_id', siteIds);
     if (error) throw error;
     for (const row of data ?? []) accumulate(row.species_id, row.count, row.created_at);
   } else {
-    const all = await readJson<LocalSighting[]>(KEYS.sightings, []);
-    for (const row of all) accumulate(row.speciesId, row.count, row.createdAt);
+    const [all, sites] = await Promise.all([readJson<LocalSighting[]>(KEYS.sightings, []), repo.getSites()]);
+    const regionIdBySiteId = new Map(sites.map((s) => [s.id, s.regionId]));
+    for (const row of all) {
+      if (regionIdBySiteId.get(row.siteId) !== regionId) continue;
+      accumulate(row.speciesId, row.count, row.createdAt);
+    }
   }
 
   return Array.from(bySpecies.entries()).map(([speciesId, v]) => ({
@@ -248,10 +278,17 @@ function resolveContentType(mediaType: MediaType, mimeType?: string | null): str
   return mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
 }
 
-export async function getUserPhotos(target: { speciesId?: string; siteId?: string }): Promise<UserPhoto[]> {
+/**
+ * Every uploaded photo/video is stamped with the region it was logged in
+ * (see migration 0006) and this always filters by it -- including photos
+ * uploaded with no site (species only), which previously had zero location
+ * info. This is what keeps "mark a fish and upload a photo while in Eilat"
+ * from ever showing up under Sharm, and vice versa.
+ */
+export async function getUserPhotos(target: { speciesId?: string; siteId?: string }, regionId: string): Promise<UserPhoto[]> {
   const userId = await getUserId();
   if (userId && supabase) {
-    let query = supabase.from('user_photos').select('*').eq('user_id', userId);
+    let query = supabase.from('user_photos').select('*').eq('user_id', userId).eq('region_id', regionId);
     if (target.speciesId) query = query.eq('species_id', target.speciesId);
     if (target.siteId) query = query.eq('site_id', target.siteId);
     const { data, error } = await query;
@@ -271,17 +308,24 @@ export async function getUserPhotos(target: { speciesId?: string; siteId?: strin
           mediaType: (row.media_type as MediaType | null) ?? 'photo',
           storagePath: row.storage_path,
           takenAt: row.taken_at ?? row.created_at,
+          regionId: row.region_id ?? undefined,
         };
       }),
     );
     return signed.filter((p) => p.uri);
   }
 
-  const photos = await readJson<UserPhoto[]>(KEYS.photos, []);
+  // Offline/local fallback: pre-existing photos saved before regions existed
+  // never got a regionId stamped on them. Treat those as belonging to
+  // whichever region is currently the default (same rule the region switcher
+  // itself falls back to), rather than dropping them or showing them everywhere.
+  const [photos, defaultRegionId] = await Promise.all([readJson<UserPhoto[]>(KEYS.photos, []), resolveDefaultRegionId()]);
   return photos
     .filter((p) => {
       if (target.speciesId && p.speciesId !== target.speciesId) return false;
       if (target.siteId && p.siteId !== target.siteId) return false;
+      const effectiveRegionId = p.regionId ?? defaultRegionId;
+      if (effectiveRegionId !== regionId) return false;
       return true;
     })
     .map((p) => ({ ...p, mediaType: p.mediaType ?? 'photo' }));
@@ -294,8 +338,9 @@ export async function addUserPhoto(target: {
   mediaType: MediaType;
   mimeType?: string | null;
   fileName?: string | null;
+  regionId: string;
 }): Promise<UserPhoto> {
-  const { speciesId, siteId, uri, mediaType, mimeType, fileName } = target;
+  const { speciesId, siteId, uri, mediaType, mimeType, fileName, regionId } = target;
   const userId = await getUserId();
   const contentType = resolveContentType(mediaType, mimeType);
 
@@ -314,6 +359,7 @@ export async function addUserPhoto(target: {
         user_id: userId,
         species_id: speciesId ?? null,
         site_id: siteId ?? null,
+        region_id: regionId,
         storage_path: path,
         taken_at: takenAt,
         media_type: mediaType,
@@ -323,7 +369,16 @@ export async function addUserPhoto(target: {
     if (error) throw error;
 
     const { data: signedUrl } = await supabase.storage.from('user-photos').createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-    return { id: data.id, speciesId, siteId, uri: signedUrl?.signedUrl ?? uri, mediaType, storagePath: path, takenAt };
+    return {
+      id: data.id,
+      speciesId,
+      siteId,
+      regionId,
+      uri: signedUrl?.signedUrl ?? uri,
+      mediaType,
+      storagePath: path,
+      takenAt,
+    };
   }
 
   const photos = await readJson<UserPhoto[]>(KEYS.photos, []);
@@ -331,6 +386,7 @@ export async function addUserPhoto(target: {
     id: `${speciesId ?? siteId}-${Date.now()}`,
     speciesId,
     siteId,
+    regionId,
     uri,
     mediaType,
     takenAt: new Date().toISOString(),

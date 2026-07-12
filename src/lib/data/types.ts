@@ -1,5 +1,11 @@
 export type RarityTier = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
 
+export interface Region {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export interface Species {
   id: string;
   slug: string;
@@ -40,6 +46,10 @@ export interface DiveSite {
   photoCredit?: string;
   photoLicense?: string;
   photoSourceUrl?: string;
+  /** Which region this site belongs to -- drives all region-scoping (species-for-region, map default center, etc.). */
+  regionId: string;
+  /** Optional curated callout, rendered distinctly from the regular description; absent for most sites. */
+  proTip?: string;
 }
 
 export interface SiteSpeciesLink {
@@ -75,6 +85,13 @@ export interface UserPhoto {
   /** Supabase Storage object path (bucket `user-photos`); absent for the offline/local fallback. Needed to delete the underlying file. */
   storagePath?: string;
   takenAt: string;
+  /**
+   * The region this photo was logged in (see migration 0006). Every new photo
+   * gets one; local/offline photos saved before this field existed won't have
+   * it (see progressStore.getUserPhotos, which treats a missing value as
+   * belonging to the default region).
+   */
+  regionId?: string;
 }
 
 export interface SiteRating {

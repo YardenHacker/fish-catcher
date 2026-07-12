@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../auth/AuthProvider';
+import { useActiveRegion } from '../region-context';
 
 import * as progress from './progressStore';
 import * as repo from './repository';
@@ -54,15 +55,48 @@ export function useSitesForSpecies(speciesSlug: string | undefined) {
   });
 }
 
+// ---------- Regions ----------
+// Same queryKey (['regions']) as the internal query in region-context.tsx's
+// RegionProvider -- TanStack Query dedupes by key, so both stay in sync
+// without this hook needing to import the provider (and vice versa).
+
+export function useRegions() {
+  return useQuery({ queryKey: ['regions'], queryFn: repo.getRegions, staleTime: Infinity });
+}
+
+export function useSpeciesForRegion(regionSlug: string | undefined) {
+  return useQuery({
+    queryKey: ['species-for-region', regionSlug],
+    queryFn: () => repo.getSpeciesForRegion(regionSlug!),
+    enabled: Boolean(regionSlug),
+    staleTime: Infinity,
+  });
+}
+
+export function useSitesForRegion(regionSlug: string | undefined) {
+  return useQuery({
+    queryKey: ['sites-for-region', regionSlug],
+    queryFn: () => repo.getSitesForRegion(regionSlug!),
+    enabled: Boolean(regionSlug),
+    staleTime: Infinity,
+  });
+}
+
 // ---------- Personal progress (sightings / photos / ratings) ----------
 // Reads/writes Supabase once signed in (same "shared source of truth" model
 // as species/sites); falls back to on-device storage when signed out. Query
 // keys include the user id so signing in/out/switching accounts refetches
 // the right data instead of showing another user's cached results.
 
+/** Region-scoped under the hood -- reads the active region from context so every call site "just works" without threading a region param through. */
 export function useFinds() {
   const { user } = useAuth();
-  return useQuery({ queryKey: ['finds', user?.id ?? 'local'], queryFn: progress.getFinds });
+  const activeRegion = useActiveRegion();
+  return useQuery({
+    queryKey: ['finds', user?.id ?? 'local', activeRegion?.id ?? 'no-region'],
+    queryFn: () => progress.getFinds(activeRegion!.id),
+    enabled: Boolean(activeRegion),
+  });
 }
 
 export function useSightingsForSpecies(speciesId: string | undefined) {
@@ -83,7 +117,8 @@ export function useSetSightingCount() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sightings', user?.id ?? 'local', variables.speciesId] });
       queryClient.invalidateQueries({ queryKey: ['site-sightings', user?.id ?? 'local', variables.siteId] });
-      queryClient.invalidateQueries({ queryKey: ['finds', user?.id ?? 'local'] });
+      // Partial key -- matches ['finds', user?.id ?? 'local', <any region id>], whichever region is active.
+      queryClient.invalidateQueries({ queryKey: ['finds'] });
     },
   });
 }
@@ -110,23 +145,27 @@ export function useMarkAllSightingsForSites() {
       for (const siteId of variables.siteIds) {
         queryClient.invalidateQueries({ queryKey: ['site-sightings', user?.id ?? 'local', siteId] });
       }
-      queryClient.invalidateQueries({ queryKey: ['finds', user?.id ?? 'local'] });
+      queryClient.invalidateQueries({ queryKey: ['finds'] });
     },
   });
 }
 
+/** Region-scoped under the hood (reads the active region from context) so a photo logged in one region never appears while viewing another. */
 export function useUserPhotos(target: { speciesId?: string; siteId?: string }) {
   const { user } = useAuth();
+  const activeRegion = useActiveRegion();
   return useQuery({
-    queryKey: ['user-photos', user?.id ?? 'local', target.speciesId ?? null, target.siteId ?? null],
-    queryFn: () => progress.getUserPhotos(target),
-    enabled: Boolean(target.speciesId || target.siteId),
+    queryKey: ['user-photos', user?.id ?? 'local', activeRegion?.id ?? 'no-region', target.speciesId ?? null, target.siteId ?? null],
+    queryFn: () => progress.getUserPhotos(target, activeRegion!.id),
+    enabled: Boolean((target.speciesId || target.siteId) && activeRegion),
   });
 }
 
+/** Stamps every upload with the currently active region -- callers never need to pass one explicitly. */
 export function useAddUserPhoto() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const activeRegion = useActiveRegion();
   return useMutation({
     mutationFn: (target: {
       speciesId?: string;
@@ -135,10 +174,13 @@ export function useAddUserPhoto() {
       mediaType: MediaType;
       mimeType?: string | null;
       fileName?: string | null;
-    }) => progress.addUserPhoto(target),
+    }) => {
+      if (!activeRegion) throw new Error('No active region selected yet.');
+      return progress.addUserPhoto({ ...target, regionId: activeRegion.id });
+    },
     onSuccess: (photo) => {
       queryClient.invalidateQueries({
-        queryKey: ['user-photos', user?.id ?? 'local', photo.speciesId ?? null, photo.siteId ?? null],
+        queryKey: ['user-photos', user?.id ?? 'local', activeRegion?.id ?? 'no-region', photo.speciesId ?? null, photo.siteId ?? null],
       });
     },
   });
@@ -148,12 +190,19 @@ export function useAddUserPhoto() {
 export function useDeleteUserPhoto() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const activeRegion = useActiveRegion();
   return useMutation({
     mutationFn: ({ photoId, storagePath }: { photoId: string; storagePath?: string; speciesId?: string; siteId?: string }) =>
       progress.deleteUserPhoto(photoId, storagePath),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['user-photos', user?.id ?? 'local', variables.speciesId ?? null, variables.siteId ?? null],
+        queryKey: [
+          'user-photos',
+          user?.id ?? 'local',
+          activeRegion?.id ?? 'no-region',
+          variables.speciesId ?? null,
+          variables.siteId ?? null,
+        ],
       });
     },
   });

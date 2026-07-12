@@ -10,6 +10,7 @@ import { useColorScheme } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { WelcomeGate } from '@/components/welcome-gate';
 import { AuthProvider, useAuth } from '@/lib/auth/AuthProvider';
+import { RegionProvider } from '@/lib/region-context';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 SplashScreen.preventAutoHideAsync();
@@ -39,10 +40,12 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <AnimatedSplashOverlay />
-          {fontsLoaded && <AppShell />}
-        </ThemeProvider>
+        <RegionProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <AnimatedSplashOverlay />
+            {fontsLoaded && <AppShell />}
+          </ThemeProvider>
+        </RegionProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

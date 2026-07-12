@@ -20,12 +20,13 @@ import {
   useMarkAllSightingsForSites,
   useSetSightingCount,
   useSightingsForSpecies,
-  useSites,
+  useSitesForRegion,
   useSitesForSpecies,
   useSpecies,
   useUserPhotos,
 } from '@/lib/data';
 import type { DiveSite, RarityTier, Sighting } from '@/lib/data/types';
+import { useActiveRegion } from '@/lib/region-context';
 
 const CHANCE_TO_SEE_LABEL: Record<RarityTier, string> = {
   Common: 'Very likely',
@@ -108,15 +109,26 @@ export default function CreatureDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const theme = useTheme();
 
+  const activeRegion = useActiveRegion();
   const { data: species, isLoading } = useSpecies(slug);
-  const { data: catalogSites } = useSitesForSpecies(slug);
-  const { data: allSites } = useSites();
+  const { data: catalogSitesAllRegions } = useSitesForSpecies(slug);
+  const { data: allSites } = useSitesForRegion(activeRegion?.slug);
   const { data: userPhotos } = useUserPhotos({ speciesId: species?.id });
-  const { data: sightings } = useSightingsForSpecies(species?.id);
+  const { data: sightingsAllRegions } = useSightingsForSpecies(species?.id);
   const setSightingCount = useSetSightingCount();
   const addUserPhoto = useAddUserPhoto();
   const markAllSightingsForSites = useMarkAllSightingsForSites();
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
+
+  // A sighting is tied to a site_id, which carries region info via the site
+  // it belongs to -- so "seen at"/"found" on this page must only count
+  // sightings at sites within the currently active region, or a fish marked
+  // seen in Eilat would incorrectly read as found while viewing Sharm.
+  const regionSiteIds = useMemo(() => new Set((allSites ?? []).map((s) => s.id)), [allSites]);
+  const sightings = useMemo(
+    () => (sightingsAllRegions ?? []).filter((s) => regionSiteIds.has(s.siteId)),
+    [sightingsAllRegions, regionSiteIds],
+  );
 
   const sightingsBySite = useMemo(() => {
     const map = new Map<string, Sighting>();
@@ -129,8 +141,10 @@ export default function CreatureDetailScreen() {
     [sightings],
   );
 
-  // Every site is markable (a fish can turn up anywhere), not just the
-  // curated catalog subset -- grouped by area purely for scannability.
+  // Every site in the active region is markable (a fish can turn up anywhere
+  // within it), not just the curated catalog subset -- grouped by area purely
+  // for scannability. A user can't mark a sighting at a site outside the
+  // region they're currently viewing.
   const sitesByArea = useMemo(() => {
     const map = new Map<string, DiveSite[]>();
     for (const site of allSites ?? []) {
@@ -145,7 +159,13 @@ export default function CreatureDetailScreen() {
   }, [allSites]);
 
   // "Best sites" stays based on the curated, researched placements (most
-  // notable site listed first), independent of the full markable site list above.
+  // notable site listed first), independent of the full markable site list
+  // above -- but scoped to the active region, since a species documented in
+  // multiple regions shouldn't surface another region's sites here.
+  const catalogSites = useMemo(
+    () => (catalogSitesAllRegions ?? []).filter((s) => s.regionId === activeRegion?.id),
+    [catalogSitesAllRegions, activeRegion?.id],
+  );
   const bestSites = useMemo(
     () => (catalogSites ?? []).slice(0, 2).map((s) => s.name).join(', ') || undefined,
     [catalogSites],

@@ -1,17 +1,30 @@
 import * as Location from 'expo-location';
 import { Link } from 'expo-router';
 import type LType from 'leaflet';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { MapContainer as MapContainerType, Marker as MarkerType, Popup as PopupType, TileLayer as TileLayerType } from 'react-leaflet';
 
+import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radii, Spacing } from '@/constants/theme';
-import { useSites } from '@/lib/data';
+import { useSitesForRegion } from '@/lib/data';
+import { useActiveRegion } from '@/lib/region-context';
 
+// Sharm el Sheikh's default center/zoom, preserved exactly as-is for existing
+// users. Any other region (including one with zero sites so far) centers on
+// the average lat/lng of its own sites instead -- see computeMapCenter.
+const SHARM_SLUG = 'sharm-el-sheikh';
 const DEFAULT_CENTER: [number, number] = [27.87, 34.35];
 const DEFAULT_ZOOM = 10;
+
+function computeMapCenter(sites: { lat: number; lng: number }[], regionSlug: string | undefined): [number, number] {
+  if (regionSlug === SHARM_SLUG || sites.length === 0) return DEFAULT_CENTER;
+  const avgLat = sites.reduce((sum, s) => sum + s.lat, 0) / sites.length;
+  const avgLng = sites.reduce((sum, s) => sum + s.lng, 0) / sites.length;
+  return [avgLat, avgLng];
+}
 
 type UserLocation = { latitude: number; longitude: number } | null;
 
@@ -59,7 +72,8 @@ interface LeafletBundle {
 }
 
 export default function MapScreen() {
-  const { data: sites, isLoading: sitesLoading } = useSites();
+  const activeRegion = useActiveRegion();
+  const { data: sites, isLoading: sitesLoading } = useSitesForRegion(activeRegion?.slug);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [locationLoading, setLocationLoading] = useState(true);
@@ -157,6 +171,7 @@ export default function MapScreen() {
   }, []);
 
   const isLoading = sitesLoading || locationLoading || !leaflet;
+  const center = useMemo(() => computeMapCenter(sites ?? [], activeRegion?.slug), [sites, activeRegion?.slug]);
 
   return (
     <ThemedView style={styles.container}>
@@ -164,6 +179,7 @@ export default function MapScreen() {
         <ThemedText type="title" style={styles.title}>
           Dive Map
         </ThemedText>
+        <RegionSwitcher />
 
         {locationDenied && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.message}>
@@ -180,7 +196,7 @@ export default function MapScreen() {
 
       {!isLoading && leaflet && (
         <View style={styles.mapContainer}>
-          <leaflet.MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} style={styles.map}>
+          <leaflet.MapContainer center={center} zoom={DEFAULT_ZOOM} style={styles.map}>
             <leaflet.TileLayer
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               attribution="&copy; OpenStreetMap contributors &copy; CARTO"
