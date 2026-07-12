@@ -49,6 +49,7 @@ async function main() {
           depth_max: s.depth_max,
           difficulty: s.difficulty,
           description: s.description,
+          pro_tip: s.pro_tip ?? null,
         },
         { onConflict: 'slug' },
       )
@@ -58,6 +59,14 @@ async function main() {
     siteIdBySlug.set(s.slug, data.id)
     console.log(`site: ${s.name}`)
   }
+
+  // Species can reference sites from other regions' seed files (e.g. a Sharm
+  // species documented in Eilat too, seeded separately by seed_eilat.mjs) --
+  // pull in every site slug already live in the DB so those links resolve
+  // regardless of which seed file originally created the site.
+  const { data: allSites, error: allSitesErr } = await supabase.from('sites').select('id, slug')
+  if (allSitesErr) throw allSitesErr
+  for (const s of allSites) siteIdBySlug.set(s.slug, s.id)
 
   const speciesIdBySlug = new Map()
   for (const sp of seed.species) {
