@@ -441,9 +441,12 @@ export async function getSiteRatings(): Promise<SiteRating[]> {
   return readJson<SiteRating[]>(KEYS.ratings, []);
 }
 
-export async function getSiteRating(siteId: string): Promise<SiteRating | undefined> {
+// Returns `null` (never `undefined`) when there's no rating yet -- same
+// "Query data cannot be undefined" React Query constraint as
+// getSiteBySlug/getSpeciesBySlug in repository.ts.
+export async function getSiteRating(siteId: string): Promise<SiteRating | null> {
   const ratings = await getSiteRatings();
-  return ratings.find((r) => r.siteId === siteId);
+  return ratings.find((r) => r.siteId === siteId) ?? null;
 }
 
 export async function rateSite(siteId: string, rating: number, notes?: string): Promise<SiteRating> {
