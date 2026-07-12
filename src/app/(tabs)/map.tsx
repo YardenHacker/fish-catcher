@@ -189,31 +189,30 @@ export default function MapScreen() {
   const { data: sites, isLoading: sitesLoading } = useSitesForRegion(activeRegion?.slug);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [locationDenied, setLocationDenied] = useState(false);
-  const [locationLoading, setLocationLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
+    // Geolocation is a nice-to-have overlay, never a gate on the map itself --
+    // some environments can leave this promise hanging indefinitely rather
+    // than rejecting. An 8s timeout guarantees this always settles.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('location timed out')), 8000),
+    );
+
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const { status } = await Promise.race([Location.requestForegroundPermissionsAsync(), timeout]);
         if (status !== 'granted') {
-          if (!cancelled) {
-            setLocationDenied(true);
-            setLocationLoading(false);
-          }
+          if (!cancelled) setLocationDenied(true);
           return;
         }
-        const loc = await Location.getCurrentPositionAsync({});
+        const loc = await Promise.race([Location.getCurrentPositionAsync({}), timeout]);
         if (!cancelled) {
           setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          setLocationLoading(false);
         }
       } catch {
-        if (!cancelled) {
-          setLocationDenied(true);
-          setLocationLoading(false);
-        }
+        if (!cancelled) setLocationDenied(true);
       }
     })();
 
@@ -232,7 +231,10 @@ export default function MapScreen() {
     }
   };
 
-  const isLoading = sitesLoading || locationLoading;
+  // Location is intentionally NOT part of this gate -- the map is fully
+  // usable without it, and a user-location marker layers in whenever/if it
+  // resolves. Only the site data itself blocks the initial render.
+  const isLoading = sitesLoading;
 
   return (
     <ThemedView style={styles.container}>
