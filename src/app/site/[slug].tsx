@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -8,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CollapsiblePicker, ToggleRow } from '@/components/collapsible-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { UserMediaThumbnail } from '@/components/user-media-thumbnail';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -74,19 +74,14 @@ function SiteSpeciesRow({
         <>
           <Pressable onPress={onAddPhoto} style={styles.inlineAddPhoto}>
             <ThemedText type="small" themeColor="accent">
-              + Add photo from here
+              + Add photo/video from here
             </ThemedText>
           </Pressable>
           {photos && photos.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.photoRow}>
                 {photos.map((photo) => (
-                  <Image
-                    key={photo.id}
-                    source={{ uri: photo.uri }}
-                    style={styles.sightedThumbnail}
-                    contentFit="cover"
-                  />
+                  <UserMediaThumbnail key={photo.id} photo={photo} style={styles.sightedThumbnail} />
                 ))}
               </View>
             </ScrollView>
@@ -202,9 +197,18 @@ export default function SiteDetailScreen() {
       setPickerMessage('Photo library permission was denied.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
-      addUserPhoto.mutate({ siteId: site.id, speciesId, uri: result.assets[0].uri });
+      const asset = result.assets[0];
+      const mediaType = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'photo';
+      addUserPhoto.mutate({
+        siteId: site.id,
+        speciesId,
+        uri: asset.uri,
+        mediaType,
+        mimeType: asset.mimeType,
+        fileName: asset.fileName,
+      });
     }
   }
 
@@ -265,7 +269,7 @@ export default function SiteDetailScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.photoRow}>
                   {userPhotos.map((photo) => (
-                    <Image key={photo.id} source={{ uri: photo.uri }} style={styles.thumbnail} contentFit="cover" />
+                    <UserMediaThumbnail key={photo.id} photo={photo} style={styles.thumbnail} />
                   ))}
                 </View>
               </ScrollView>
@@ -278,7 +282,7 @@ export default function SiteDetailScreen() {
               onPress={() => pickAndUploadPhoto()}
               style={[styles.addPhotoButton, { backgroundColor: theme.accent }]}>
               <ThemedText type="smallBold" style={{ color: theme.accentContrast }}>
-                Add photo
+                Add photo or video
               </ThemedText>
             </Pressable>
             {pickerMessage && (
