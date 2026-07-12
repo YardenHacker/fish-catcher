@@ -11,7 +11,15 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { RARITY_TIER_COLOR, RARITY_TIER_ORDER, Species, useFinds, useSpeciesList } from '@/lib/data';
+import {
+  RARITY_TIER_COLOR,
+  RARITY_TIER_ORDER,
+  Species,
+  useFinds,
+  useSites,
+  useSpeciesForSite,
+  useSpeciesList,
+} from '@/lib/data';
 
 const ALL = 'All';
 
@@ -99,9 +107,18 @@ function CreatureCard({ species, found }: { species: Species; found: boolean }) 
 
 export default function FishScreen() {
   const { data: species, isLoading } = useSpeciesList();
+  const { data: sites } = useSites();
   const { data: finds } = useFinds();
   const [groupFilter, setGroupFilter] = useState<string>(ALL);
   const [rarityFilter, setRarityFilter] = useState<string>(ALL);
+  const [siteFilter, setSiteFilter] = useState<string>(ALL);
+
+  // siteFilter holds a site slug (or ALL). Only fetched when a site is
+  // actually selected -- useSpeciesForSite is disabled (via `enabled`) while
+  // siteFilter === ALL, so this stays a no-op query in the common case.
+  const { data: siteSpecies, isLoading: isSiteSpeciesLoading } = useSpeciesForSite(
+    siteFilter === ALL ? undefined : siteFilter,
+  );
 
   const foundIds = useMemo(() => new Set((finds ?? []).map((f) => f.speciesId)), [finds]);
 
@@ -110,20 +127,32 @@ export default function FishScreen() {
     return Array.from(new Set(species.map((s) => s.group))).sort();
   }, [species]);
 
+  const baseList = siteFilter === ALL ? species : siteSpecies;
+
   const filtered = useMemo(() => {
-    if (!species) return [];
-    return species.filter((s) => {
+    if (!baseList) return [];
+    return baseList.filter((s) => {
       if (groupFilter !== ALL && s.group !== groupFilter) return false;
       if (rarityFilter !== ALL && s.rarityTier !== rarityFilter) return false;
       return true;
     });
-  }, [species, groupFilter, rarityFilter]);
+  }, [baseList, groupFilter, rarityFilter]);
+
+  const gridLoading = isLoading || (siteFilter !== ALL && isSiteSpeciesLoading);
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <ThemedText type="title">Fish</ThemedText>
+          {/* Progress stays scoped to the whole catalog rather than the
+              filtered set -- "found" is a personal, permanent milestone
+              (species you've ever logged), and re-scoping it to whatever
+              site/group/rarity filter happens to be active would make the
+              number jump around in a way that reads as if progress were
+              lost. The grid below is what narrows; this readout answers
+              "how much of the dex have I filled in overall," which stays
+              meaningful (and stable) no matter what filters are on. */}
           <ProgressReadout found={foundIds.size} total={species?.length ?? 0} />
         </View>
 
@@ -155,6 +184,21 @@ export default function FishScreen() {
               )}
               style={styles.chipList}
             />
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={[ALL, ...(sites ?? [])]}
+              keyExtractor={(item) => `site-${typeof item === 'string' ? item : item.slug}`}
+              contentContainerStyle={styles.chipRow}
+              renderItem={({ item }) => {
+                const label = typeof item === 'string' ? item : item.name;
+                const value = typeof item === 'string' ? item : item.slug;
+                return (
+                  <FilterChip label={label} selected={siteFilter === value} onPress={() => setSiteFilter(value)} />
+                );
+              }}
+              style={styles.chipList}
+            />
 
             <FlatList
               data={filtered}
@@ -165,7 +209,7 @@ export default function FishScreen() {
               renderItem={({ item }) => <CreatureCard species={item} found={foundIds.has(item.id)} />}
               ListEmptyComponent={
                 <ThemedText type="small" themeColor="textSecondary">
-                  No creatures match these filters.
+                  {gridLoading ? 'Loading…' : 'No creatures match these filters.'}
                 </ThemedText>
               }
             />
