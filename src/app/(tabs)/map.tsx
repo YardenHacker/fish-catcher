@@ -15,9 +15,24 @@ const DEFAULT_ZOOM = 10;
 
 type UserLocation = { latitude: number; longitude: number } | null;
 
-function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: number }[], userLocation: UserLocation) {
+/**
+ * Marker color per dive-site area, matching the areas defined in
+ * `src/app/(tabs)/sites.tsx` (AREA_ORDER) so the map stays visually
+ * consistent with the rest of the app. Areas not in this list (there
+ * shouldn't be any) fall back to DEFAULT_AREA_COLOR.
+ */
+const AREA_COLORS: Record<string, string> = {
+  'Ras Mohammed': '#e2723a',
+  'Straits of Tiran': '#3d78d8',
+  'Sharm Local': '#0a7a6e',
+  'Offshore Wrecks': '#9b59d0',
+};
+const DEFAULT_AREA_COLOR = '#6b7785';
+
+function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: number; area: string }[], userLocation: UserLocation) {
   const sitesJson = JSON.stringify(sites);
   const userLocationJson = JSON.stringify(userLocation);
+  const areaColorsJson = JSON.stringify(AREA_COLORS);
 
   return `<!DOCTYPE html>
 <html>
@@ -42,17 +57,37 @@ function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: num
         cursor: pointer;
       }
       .site-popup-title { font-family: sans-serif; font-weight: 700; margin: 0 0 4px 0; }
+      .site-marker-icon { background: transparent; border: none; }
+      .area-legend {
+        position: absolute;
+        bottom: 24px;
+        left: 10px;
+        z-index: 1000;
+        background: rgba(255, 255, 255, 0.92);
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-family: sans-serif;
+        font-size: 11px;
+        line-height: 1.6;
+        color: #10161c;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      }
+      .area-legend-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+      .area-legend-swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1px solid #fff; flex: none; }
     </style>
   </head>
   <body>
     <div id="map"></div>
+    <div class="area-legend" id="area-legend"></div>
     <script>
       var sites = ${sitesJson};
       var userLocation = ${userLocationJson};
+      var AREA_COLORS = ${areaColorsJson};
+      var DEFAULT_AREA_COLOR = '${DEFAULT_AREA_COLOR}';
 
       var map = L.map('map').setView([${DEFAULT_CENTER[0]}, ${DEFAULT_CENTER[1]}], ${DEFAULT_ZOOM});
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         maxZoom: 20,
         subdomains: 'abcd',
         detectRetina: true,
@@ -70,8 +105,23 @@ function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: num
         className: 'user-location-marker'
       });
 
+      function pinIcon(color) {
+        var svg = '<svg width="25" height="34" viewBox="0 0 25 34" xmlns="http://www.w3.org/2000/svg">' +
+          '<path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 21.5 12.5 21.5s12.5-12.1 12.5-21.5C25 5.6 19.4 0 12.5 0z" fill="' + color + '" stroke="#ffffff" stroke-width="1.5"/>' +
+          '<circle cx="12.5" cy="12.5" r="5" fill="#ffffff"/>' +
+          '</svg>';
+        return L.divIcon({
+          html: svg,
+          className: 'site-marker-icon',
+          iconSize: [25, 34],
+          iconAnchor: [12.5, 34],
+          popupAnchor: [0, -30]
+        });
+      }
+
       sites.forEach(function (site) {
-        var marker = L.marker([site.lat, site.lng]).addTo(map);
+        var color = AREA_COLORS[site.area] || DEFAULT_AREA_COLOR;
+        var marker = L.marker([site.lat, site.lng], { icon: pinIcon(color) }).addTo(map);
         var popupNode = document.createElement('div');
         var title = document.createElement('p');
         title.className = 'site-popup-title';
@@ -86,6 +136,26 @@ function buildMapHtml(sites: { slug: string; name: string; lat: number; lng: num
         popupNode.appendChild(button);
         marker.bindPopup(popupNode);
       });
+
+      (function renderLegend() {
+        var legend = document.getElementById('area-legend');
+        var seenAreas = [];
+        sites.forEach(function (site) {
+          if (seenAreas.indexOf(site.area) === -1) seenAreas.push(site.area);
+        });
+        seenAreas.forEach(function (area) {
+          var item = document.createElement('div');
+          item.className = 'area-legend-item';
+          var swatch = document.createElement('span');
+          swatch.className = 'area-legend-swatch';
+          swatch.style.background = AREA_COLORS[area] || DEFAULT_AREA_COLOR;
+          var label = document.createElement('span');
+          label.textContent = area;
+          item.appendChild(swatch);
+          item.appendChild(label);
+          legend.appendChild(item);
+        });
+      })();
 
       if (userLocation) {
         L.marker([userLocation.latitude, userLocation.longitude], { icon: userIcon })

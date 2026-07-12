@@ -7,13 +7,42 @@ import type { MapContainer as MapContainerType, Marker as MarkerType, Popup as P
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radii, Spacing } from '@/constants/theme';
 import { useSites } from '@/lib/data';
 
 const DEFAULT_CENTER: [number, number] = [27.87, 34.35];
 const DEFAULT_ZOOM = 10;
 
 type UserLocation = { latitude: number; longitude: number } | null;
+
+/**
+ * Marker color per dive-site area, matching the areas defined in
+ * `src/app/(tabs)/sites.tsx` (AREA_ORDER) so the map stays visually
+ * consistent with the rest of the app. Areas not in this list (there
+ * shouldn't be any) fall back to DEFAULT_AREA_COLOR.
+ */
+const AREA_COLORS: Record<string, string> = {
+  'Ras Mohammed': '#e2723a',
+  'Straits of Tiran': '#3d78d8',
+  'Sharm Local': '#0a7a6e',
+  'Offshore Wrecks': '#9b59d0',
+};
+const DEFAULT_AREA_COLOR = '#6b7785';
+
+function areaPinIcon(L: typeof LType, color: string): LType.DivIcon {
+  const svg =
+    '<svg width="25" height="34" viewBox="0 0 25 34" xmlns="http://www.w3.org/2000/svg">' +
+    `<path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 21.5 12.5 21.5s12.5-12.1 12.5-21.5C25 5.6 19.4 0 12.5 0z" fill="${color}" stroke="#ffffff" stroke-width="1.5"/>` +
+    '<circle cx="12.5" cy="12.5" r="5" fill="#ffffff"/>' +
+    '</svg>';
+  return L.divIcon({
+    html: svg,
+    className: 'site-marker-icon',
+    iconSize: [25, 34],
+    iconAnchor: [12.5, 34],
+    popupAnchor: [0, -30],
+  });
+}
 
 // Leaflet touches `window` as soon as its module is evaluated (not just when
 // rendered), which crashes Expo Router's server-side render of this route in
@@ -65,6 +94,20 @@ export default function MapScreen() {
           shadowSize: [41, 41],
           className: 'user-location-marker',
         });
+
+        // Leaflet's default `.leaflet-div-icon` CSS (from leaflet.css, just
+        // imported above) draws a white box with a border behind every
+        // divIcon. The colored SVG pins used for area markers below need
+        // that stripped so only the pin shape shows; this project has no
+        // shared stylesheet the two map screens both pull from, so it's
+        // injected here directly rather than touching global.css.
+        const styleId = 'site-marker-icon-style';
+        if (!document.getElementById(styleId)) {
+          const style = document.createElement('style');
+          style.id = styleId;
+          style.textContent = '.site-marker-icon { background: transparent !important; border: none !important; }';
+          document.head.appendChild(style);
+        }
 
         setLeaflet({
           L,
@@ -139,7 +182,7 @@ export default function MapScreen() {
         <View style={styles.mapContainer}>
           <leaflet.MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} style={styles.map}>
             <leaflet.TileLayer
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               attribution="&copy; OpenStreetMap contributors &copy; CARTO"
               subdomains="abcd"
               maxZoom={20}
@@ -147,7 +190,10 @@ export default function MapScreen() {
             />
 
             {(sites ?? []).map((site) => (
-              <leaflet.Marker key={site.id} position={[site.lat, site.lng]}>
+              <leaflet.Marker
+                key={site.id}
+                position={[site.lat, site.lng]}
+                icon={areaPinIcon(leaflet.L, AREA_COLORS[site.area] ?? DEFAULT_AREA_COLOR)}>
                 <leaflet.Popup>
                   <strong>{site.name}</strong>
                   <div>
@@ -165,6 +211,17 @@ export default function MapScreen() {
               </leaflet.Marker>
             )}
           </leaflet.MapContainer>
+
+          <View style={styles.legend} pointerEvents="none">
+            {Array.from(new Set((sites ?? []).map((site) => site.area))).map((area) => (
+              <View key={area} style={styles.legendItem}>
+                <View style={[styles.legendSwatch, { backgroundColor: AREA_COLORS[area] ?? DEFAULT_AREA_COLOR }]} />
+                <ThemedText type="small" style={styles.legendLabel}>
+                  {area}
+                </ThemedText>
+              </View>
+            ))}
+          </View>
         </View>
       )}
     </ThemedView>
@@ -178,4 +235,18 @@ const styles = StyleSheet.create({
   message: { paddingBottom: Spacing.one },
   mapContainer: { flex: 1 },
   map: { height: '100%', width: '100%' },
+  legend: {
+    position: 'absolute',
+    bottom: Spacing.four,
+    left: Spacing.two,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: Radii.medium,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    gap: Spacing.half,
+    zIndex: 1000,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  legendSwatch: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: '#fff' },
+  legendLabel: { color: '#10161c', fontSize: 12, lineHeight: 16 },
 });
