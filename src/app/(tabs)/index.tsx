@@ -69,7 +69,7 @@ function CreatureCard({ species, found }: { species: Species; found: boolean }) 
               </View>
             ) : (
               <ThemedText type="title" style={[styles.placeholderGlyph, { color: found ? tierColor : theme.textSecondary }]}>
-                {found ? species.commonName.charAt(0).toUpperCase() : '?'}
+                {species.commonName.charAt(0).toUpperCase()}
               </ThemedText>
             )}
             <CornerFrame color={found ? tierColor : theme.border} />
@@ -85,11 +85,11 @@ function CreatureCard({ species, found }: { species: Species; found: boolean }) 
               </View>
             )}
             <View style={styles.rarityBadgeWrap}>
-              <RarityTag label={found ? species.rarityTier : '???'} color={tierColor} muted={!found} />
+              <RarityTag label={species.rarityTier} color={tierColor} muted={!found} />
             </View>
           </View>
           <ThemedText type="smallBold" numberOfLines={1} themeColor={found ? 'text' : 'textSecondary'}>
-            {found ? species.commonName : '???'}
+            {species.commonName}
           </ThemedText>
         </ThemedView>
       </Pressable>
