@@ -2,7 +2,7 @@ import * as Location from 'expo-location';
 import { Link } from 'expo-router';
 import type LType from 'leaflet';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import type { MapContainer as MapContainerType, Marker as MarkerType, Popup as PopupType, TileLayer as TileLayerType } from 'react-leaflet';
 
 import { RegionSwitcher } from '@/components/region-switcher';
@@ -58,10 +58,24 @@ function areaPinIcon(L: typeof LType, color: string): LType.DivIcon {
 }
 
 // Leaflet touches `window` as soon as its module is evaluated (not just when
-// rendered), which crashes Expo Router's server-side render of this route in
-// Node. It must only ever be imported inside the browser, after mount --
-// never at module scope -- so both the import and the resulting components
-// are loaded lazily on the client via this piece of state.
+// rendered), which crashes Expo Router's static-export server-side render of
+// this route in Node. It must only ever be evaluated inside the browser,
+// after mount -- never at module scope -- so both the require() and the
+// resulting components are loaded lazily on the client via this piece of
+// state.
+//
+// This uses a runtime require() rather than a dynamic import(). Metro's web
+// bundler serves import()-triggered chunks as separate "lazy bundle" HTTP
+// requests with their own numeric module-ID space; in practice that space
+// can drift out of sync with the already-running main bundle's module
+// registry (surfaces as "Requiring unknown module NNNN", reproducible
+// against the dev server even after a clean cache restart). A synchronous
+// require() call, by contrast, is statically analyzable, so Metro inlines
+// leaflet's entire dependency subgraph directly into this route's own
+// bundle in the same numbering pass -- no separate chunk fetch, no
+// cross-bundle module-ID mismatch possible. Evaluation still only happens
+// when the require() call actually runs (inside the effect below), so the
+// static-export SSR safety this used to get from import() is unaffected.
 interface LeafletBundle {
   L: typeof LType;
   MapContainer: typeof MapContainerType;
@@ -71,20 +85,31 @@ interface LeafletBundle {
   userIcon: LType.Icon;
 }
 
+function loadLeafletSync() {
+  const L: typeof LType = require('leaflet');
+  const reactLeaflet: typeof import('react-leaflet') = require('react-leaflet');
+  require('leaflet/dist/leaflet.css');
+  return { L, reactLeaflet };
+}
+
 export default function MapScreen() {
   const activeRegion = useActiveRegion();
   const { data: sites, isLoading: sitesLoading } = useSitesForRegion(activeRegion?.slug);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [leaflet, setLeaflet] = useState<LeafletBundle | null>(null);
+  const [leafletFailed, setLeafletFailed] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLeafletFailed(false);
 
-    Promise.all([import('leaflet'), import('react-leaflet'), import('leaflet/dist/leaflet.css')]).then(
-      ([{ default: L }, reactLeaflet]) => {
-        if (cancelled) return;
+    try {
+      const { L, reactLeaflet } = loadLeafletSync();
+      if (cancelled) return;
 
+      {
         // Leaflet's default marker icon references image assets in a way
         // that breaks under most bundlers (webpack/Metro). The standard
         // workaround is to delete the broken instance method and re-merge
@@ -130,13 +155,15 @@ export default function MapScreen() {
           Popup: reactLeaflet.Popup,
           userIcon,
         });
-      },
-    );
+      }
+    } catch {
+      if (!cancelled) setLeafletFailed(true);
+    }
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,7 +203,7 @@ export default function MapScreen() {
   // is fully usable without it, and a user-location overlay layers in
   // whenever/if it resolves. Only the map's own real dependencies (site data,
   // the lazily-loaded Leaflet bundle) block the initial render.
-  const isLoading = sitesLoading || !leaflet;
+  const isLoading = sitesLoading || (!leaflet && !leafletFailed);
   const center = useMemo(() => computeMapCenter(sites ?? [], activeRegion?.slug), [sites, activeRegion?.slug]);
 
   return (
@@ -197,6 +224,17 @@ export default function MapScreen() {
           <ThemedText type="small" themeColor="textSecondary" style={styles.message}>
             Loading map…
           </ThemedText>
+        )}
+
+        {leafletFailed && (
+          <View style={styles.errorRow}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.message}>
+              The map failed to load.
+            </ThemedText>
+            <Pressable onPress={() => setRetryToken((t) => t + 1)} style={styles.retryButton}>
+              <ThemedText type="smallBold">Retry</ThemedText>
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -255,6 +293,8 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: Spacing.four, paddingTop: Spacing.four, paddingBottom: Spacing.two, gap: Spacing.one },
   title: { fontSize: 28, lineHeight: 34 },
   message: { paddingBottom: Spacing.one },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  retryButton: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: Radii.small, borderWidth: 1 },
   mapContainer: { flex: 1 },
   map: { height: '100%', width: '100%' },
   legend: {
