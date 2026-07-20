@@ -88,14 +88,12 @@ export function useSitesForRegion(regionSlug: string | undefined) {
 // keys include the user id so signing in/out/switching accounts refetches
 // the right data instead of showing another user's cached results.
 
-/** Region-scoped under the hood -- reads the active region from context so every call site "just works" without threading a region param through. */
+/** Global across every region -- a species found anywhere counts as found everywhere. See progressStore.getFinds. */
 export function useFinds() {
   const { user } = useAuth();
-  const activeRegion = useActiveRegion();
   return useQuery({
-    queryKey: ['finds', user?.id ?? 'local', activeRegion?.id ?? 'no-region'],
-    queryFn: () => progress.getFinds(activeRegion!.id),
-    enabled: Boolean(activeRegion),
+    queryKey: ['finds', user?.id ?? 'local'],
+    queryFn: () => progress.getFinds(),
   });
 }
 

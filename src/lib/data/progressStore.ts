@@ -193,50 +193,53 @@ async function resolveDefaultRegionId(): Promise<string | undefined> {
 }
 
 /**
- * Aggregate finds, scoped to one region: a sighting counts only if it was
- * logged at a site belonging to `regionId`. This is what keeps the Fish
- * tab/Collection's "found" state completely isolated between regions.
+ * Aggregate finds, GLOBAL across every region: a species counts as found the
+ * moment it's been logged at any site, anywhere. This is what makes the Fish
+ * tab/Collection's "found" state a single, unified collection instead of one
+ * isolated per region -- only site-scoped things (sightings themselves,
+ * photos) stay tied to where they were actually logged.
  */
-export async function getFinds(regionId: string): Promise<Find[]> {
+export async function getFinds(): Promise<Find[]> {
   const userId = await getUserId();
-  const bySpecies = new Map<string, { total: number; firstFoundAt: string }>();
+  const bySpecies = new Map<string, { total: number; firstFoundAt: string; firstFoundSiteId: string; siteIds: Set<string> }>();
 
-  function accumulate(speciesId: string, count: number, firstSeenCandidate: string) {
+  function accumulate(speciesId: string, siteId: string, count: number, firstSeenCandidate: string) {
     const existing = bySpecies.get(speciesId);
     if (existing) {
       existing.total += count;
-      if (firstSeenCandidate < existing.firstFoundAt) existing.firstFoundAt = firstSeenCandidate;
+      existing.siteIds.add(siteId);
+      if (firstSeenCandidate < existing.firstFoundAt) {
+        existing.firstFoundAt = firstSeenCandidate;
+        existing.firstFoundSiteId = siteId;
+      }
     } else {
-      bySpecies.set(speciesId, { total: count, firstFoundAt: firstSeenCandidate });
+      bySpecies.set(speciesId, {
+        total: count,
+        firstFoundAt: firstSeenCandidate,
+        firstFoundSiteId: siteId,
+        siteIds: new Set([siteId]),
+      });
     }
   }
 
   if (userId && supabase) {
-    const { data: siteRows, error: siteError } = await supabase.from('sites').select('id').eq('region_id', regionId);
-    if (siteError) throw siteError;
-    const siteIds = (siteRows ?? []).map((row: any) => row.id);
-    if (siteIds.length === 0) return [];
-
     const { data, error } = await supabase
       .from('sightings')
-      .select('species_id, count, created_at')
-      .eq('user_id', userId)
-      .in('site_id', siteIds);
+      .select('species_id, site_id, count, created_at')
+      .eq('user_id', userId);
     if (error) throw error;
-    for (const row of data ?? []) accumulate(row.species_id, row.count, row.created_at);
+    for (const row of data ?? []) accumulate(row.species_id, row.site_id, row.count, row.created_at);
   } else {
-    const [all, sites] = await Promise.all([readJson<LocalSighting[]>(KEYS.sightings, []), repo.getSites()]);
-    const regionIdBySiteId = new Map(sites.map((s) => [s.id, s.regionId]));
-    for (const row of all) {
-      if (regionIdBySiteId.get(row.siteId) !== regionId) continue;
-      accumulate(row.speciesId, row.count, row.createdAt);
-    }
+    const all = await readJson<LocalSighting[]>(KEYS.sightings, []);
+    for (const row of all) accumulate(row.speciesId, row.siteId, row.count, row.createdAt);
   }
 
   return Array.from(bySpecies.entries()).map(([speciesId, v]) => ({
     speciesId,
     totalCount: v.total,
     firstFoundAt: v.firstFoundAt,
+    firstFoundSiteId: v.firstFoundSiteId,
+    siteIds: Array.from(v.siteIds),
   }));
 }
 

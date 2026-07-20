@@ -66,11 +66,22 @@ export interface Sighting {
   updatedAt: string;
 }
 
-/** Aggregate across all of a species' sightings -- drives the Fish tab lock/unlock and Collection list. */
+/**
+ * Aggregate across ALL of a species' sightings, everywhere -- drives the Fish
+ * tab lock/unlock and Collection list. Global by design: seeing a species
+ * once at any site, in any region, is enough to count it "found" everywhere
+ * it's later encountered in the app. `siteIds`/`firstFoundSiteId` retain
+ * *where* it was seen so the Collection screen can still show that, even
+ * though the found status itself no longer depends on which region is active.
+ */
 export interface Find {
   speciesId: string;
   totalCount: number;
   firstFoundAt: string;
+  /** The site of the earliest-logged sighting. */
+  firstFoundSiteId: string;
+  /** Every distinct site this species has ever been logged at (includes firstFoundSiteId). */
+  siteIds: string[];
 }
 
 export type MediaType = 'photo' | 'video';

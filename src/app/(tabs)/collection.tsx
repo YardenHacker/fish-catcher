@@ -7,37 +7,46 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CornerFrame } from '@/components/corner-frame';
 import { RarityTag } from '@/components/rarity-tag';
-import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useFinds, useSpeciesForRegion, useUserPhotos, RARITY_TIER_COLOR, RARITY_TIER_ORDER } from '@/lib/data';
-import type { RarityTier, Species } from '@/lib/data';
-import { useActiveRegion } from '@/lib/region-context';
+import { useFinds, useSites, useSpeciesList, useUserPhotos, RARITY_TIER_COLOR, RARITY_TIER_ORDER } from '@/lib/data';
+import type { DiveSite, RarityTier, Species } from '@/lib/data';
 
-type FoundSpecies = Species & { firstFoundAt: string };
+// The collection is one unified list across every region -- a species found
+// once, anywhere, is found for good. `foundSite` (the site of the earliest
+// sighting) and `extraSiteCount` (how many OTHER sites it's also been seen
+// at) are what let each row still answer "where did I see this," even
+// though the found status itself no longer depends on which region that was.
+type FoundSpecies = Species & { firstFoundAt: string; foundSite: DiveSite | undefined; extraSiteCount: number };
 
 export default function CollectionScreen() {
   const theme = useTheme();
-  const activeRegion = useActiveRegion();
-  const { data: species, isLoading: speciesLoading } = useSpeciesForRegion(activeRegion?.slug);
+  const { data: species, isLoading: speciesLoading } = useSpeciesList();
+  const { data: sites, isLoading: sitesLoading } = useSites();
   const { data: finds, isLoading: findsLoading } = useFinds();
 
-  const isLoading = speciesLoading || findsLoading;
+  const isLoading = speciesLoading || sitesLoading || findsLoading;
 
   const found: FoundSpecies[] = useMemo(() => {
     if (!species || !finds) return [];
     const speciesById = new Map(species.map((s) => [s.id, s]));
+    const siteById = new Map((sites ?? []).map((s) => [s.id, s]));
     const rows: FoundSpecies[] = [];
     for (const find of finds) {
       const match = speciesById.get(find.speciesId);
       if (match) {
-        rows.push({ ...match, firstFoundAt: find.firstFoundAt });
+        rows.push({
+          ...match,
+          firstFoundAt: find.firstFoundAt,
+          foundSite: siteById.get(find.firstFoundSiteId),
+          extraSiteCount: Math.max(0, find.siteIds.length - 1),
+        });
       }
     }
     return rows.sort((a, b) => new Date(b.firstFoundAt).getTime() - new Date(a.firstFoundAt).getTime());
-  }, [species, finds]);
+  }, [species, sites, finds]);
 
   const collectionScore = useMemo(() => found.reduce((sum, s) => sum + s.rarityScore, 0), [found]);
 
@@ -63,7 +72,6 @@ export default function CollectionScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <ThemedText type="title">My Collection</ThemedText>
-          <RegionSwitcher />
 
           {isLoading ? (
             <ThemedText type="default" themeColor="textSecondary" style={styles.loading}>
@@ -99,8 +107,7 @@ export default function CollectionScreen() {
               {found.length === 0 ? (
                 <ThemedView type="backgroundElement" style={styles.emptyState}>
                   <ThemedText type="default" themeColor="textSecondary" style={styles.emptyText}>
-                    No finds yet — head to the Fish tab and start exploring the reefs of{' '}
-                    {activeRegion?.name ?? 'this region'}!
+                    No finds yet — head to the Fish tab and start exploring the reefs!
                   </ThemedText>
                 </ThemedView>
               ) : (
@@ -148,6 +155,12 @@ function FoundRow({ species }: { species: FoundSpecies }) {
             <View style={styles.rowText}>
               <ThemedText type="smallBold">{species.commonName}</ThemedText>
               <RarityTag label={species.rarityTier} color={tierColor} />
+              {species.foundSite && (
+                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                  Seen at: {species.foundSite.area} — {species.foundSite.name}
+                  {species.extraSiteCount > 0 ? ` (+${species.extraSiteCount} more)` : ''}
+                </ThemedText>
+              )}
             </View>
           </View>
           <ThemedText type="mono" themeColor="textSecondary">

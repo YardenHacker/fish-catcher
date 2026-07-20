@@ -142,7 +142,16 @@ export default function FishScreen() {
     siteFilter === ALL ? undefined : siteFilter,
   );
 
+  // foundIds is global (a species found in any region counts as found here
+  // too -- see useFinds); foundInRegionCount narrows that down to just this
+  // region's own species so the progress readout below stays meaningful as
+  // "how much of THIS region's catalog I've filled in," not a number that
+  // can exceed the region's own species count.
   const foundIds = useMemo(() => new Set((finds ?? []).map((f) => f.speciesId)), [finds]);
+  const foundInRegionCount = useMemo(
+    () => (species ?? []).filter((s) => foundIds.has(s.id)).length,
+    [species, foundIds],
+  );
 
   const groups = useMemo(() => {
     if (!species) return [];
@@ -180,7 +189,7 @@ export default function FishScreen() {
               lost. The grid below is what narrows; this readout answers
               "how much of the dex have I filled in overall," which stays
               meaningful (and stable) no matter what filters are on. */}
-          <ProgressReadout found={foundIds.size} total={species?.length ?? 0} />
+          <ProgressReadout found={foundInRegionCount} total={species?.length ?? 0} />
         </View>
 
         {isLoading ? (
