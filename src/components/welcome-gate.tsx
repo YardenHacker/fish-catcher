@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,7 +15,10 @@ export function WelcomeGate({ onSkip }: { onSkip: () => void }) {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <View style={styles.identity}>
-            <ThemedText type="title">🎣 Fish Catcher</ThemedText>
+            <View style={styles.titleRow}>
+              <Image source={require('@/assets/images/manta-icon.png')} style={styles.mantaIcon} contentFit="contain" />
+              <ThemedText type="title">Fish Catcher</ThemedText>
+            </View>
             <ThemedText type="default" themeColor="textSecondary">
               Your dive companion across the Red Sea and Israel's Mediterranean coast. Sign in so your
               found species, photos, and site ratings follow you across devices.
@@ -49,6 +53,15 @@ const styles = StyleSheet.create({
   },
   identity: {
     gap: Spacing.two,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  mantaIcon: {
+    width: 32,
+    height: 32,
   },
   skipButton: {
     alignItems: 'center',
