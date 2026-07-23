@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ScreenBackground } from '@/components/screen-background';
 import { SignInForm } from '@/components/sign-in-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -9,6 +10,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 export function WelcomeGate({ onSkip }: { onSkip: () => void }) {
   return (
     <ThemedView style={styles.container}>
+      <ScreenBackground source={require('@/assets/images/backgrounds/sites.jpg')} />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <View style={styles.identity}>
