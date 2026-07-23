@@ -2,20 +2,24 @@ import { Image, type ImageSource } from 'expo-image';
 import { StyleSheet, View, useColorScheme } from 'react-native';
 
 /**
- * Full-bleed underwater background photo behind a screen's content, with a
- * dark scrim on top so cards/text stay legible. Dark-mode only: the photos
- * are all deep-navy/moody by design (matching the dive-computer HUD look),
- * which would clash with light mode's inverted (light background/dark text)
- * expectation -- light mode falls back to ThemedView's plain flat color.
+ * Full-bleed underwater background photo behind a screen's content. The
+ * photos are all deep-navy/moody by design (matching the dive-computer HUD
+ * look), so the two themes need very different scrims on top:
+ *  - dark mode: a dark translucent scrim -- the photo mostly shows through,
+ *    matching the theme's own near-black background.
+ *  - light mode: a light translucent scrim (the theme's own light
+ *    background color, at high opacity) -- the photo shows through only
+ *    faintly, as a tinted watermark, so it stays light enough for the
+ *    theme's dark text to read clearly on top.
  */
 export function ScreenBackground({ source }: { source: ImageSource }) {
   const scheme = useColorScheme();
-  if (scheme !== 'dark') return null;
+  const isDark = scheme === 'dark';
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" />
-      <View style={styles.scrim} />
+      <View style={[styles.scrim, { backgroundColor: isDark ? 'rgba(16, 22, 28, 0.55)' : 'rgba(238, 242, 244, 0.8)' }]} />
     </View>
   );
 }
@@ -27,6 +31,5 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(16, 22, 28, 0.55)',
   },
 });
