@@ -215,6 +215,15 @@ export function useSiteRating(siteId: string | undefined) {
   });
 }
 
+/** Every dive site the user has personally rated, across every region -- drives the star/notes preview and star filter on the Sites list. */
+export function useSiteRatings() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['site-ratings', user?.id ?? 'local'],
+    queryFn: () => progress.getSiteRatings(),
+  });
+}
+
 export function useRateSite() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -223,6 +232,7 @@ export function useRateSite() {
       progress.rateSite(siteId, rating, notes),
     onSuccess: (rating) => {
       queryClient.invalidateQueries({ queryKey: ['site-rating', user?.id ?? 'local', rating.siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site-ratings', user?.id ?? 'local'] });
     },
   });
 }

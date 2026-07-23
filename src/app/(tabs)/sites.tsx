@@ -8,12 +8,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useSitesForRegion } from '@/lib/data';
-import type { DiveSite } from '@/lib/data';
+import { useFinds, useSiteRatings, useSitesForRegion } from '@/lib/data';
+import type { DiveSite, SiteRating } from '@/lib/data';
 import { useActiveRegion } from '@/lib/region-context';
 
 const ALL = 'All';
 const DIFFICULTY_ORDER = ['Beginner', 'Intermediate', 'Advanced'];
+const STAR_OPTIONS = [5, 4, 3, 2, 1];
+const VISITED_OPTIONS = ['Visited', 'Unvisited'];
 
 // Preferred display order per area -- areas not listed here (there
 // shouldn't be many) just fall in after these, in first-seen order.
@@ -69,7 +71,21 @@ function Badge({ label }: { label: string }) {
   );
 }
 
-function SiteRow({ site }: { site: DiveSite }) {
+/** Read-only star display -- same ★/☆ glyph as the editable StarRating on the site detail screen. */
+function StarsReadout({ rating }: { rating: number }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.starRow}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        <ThemedText key={value} style={[styles.star, { color: theme.text }]}>
+          {value <= rating ? '★' : '☆'}
+        </ThemedText>
+      ))}
+    </View>
+  );
+}
+
+function SiteRow({ site, rating, visited }: { site: DiveSite; rating: SiteRating | undefined; visited: boolean }) {
   return (
     <Link href={`/site/${site.slug}`} asChild>
       <Pressable style={({ pressed }) => [pressed && styles.rowPressed]}>
@@ -78,6 +94,7 @@ function SiteRow({ site }: { site: DiveSite }) {
           <View style={styles.badgeRow}>
             <Badge label={site.type} />
             <Badge label={site.difficulty} />
+            {visited && <Badge label="Visited" />}
           </View>
           <ThemedText type="small" themeColor="textSecondary">
             {site.depthMin}–{site.depthMax}m
@@ -85,6 +102,18 @@ function SiteRow({ site }: { site: DiveSite }) {
           <ThemedText type="small" numberOfLines={1}>
             {site.description}
           </ThemedText>
+          {/* Your own review, if you've left one -- there's no public review
+              system, ratings/notes are always the current user's own. */}
+          {rating && (
+            <View style={styles.reviewPreview}>
+              <StarsReadout rating={rating.rating} />
+              {rating.notes ? (
+                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                  "{rating.notes}"
+                </ThemedText>
+              ) : null}
+            </View>
+          )}
         </ThemedView>
       </Pressable>
     </Link>
@@ -94,13 +123,40 @@ function SiteRow({ site }: { site: DiveSite }) {
 export default function SitesScreen() {
   const activeRegion = useActiveRegion();
   const { data: sites, isLoading } = useSitesForRegion(activeRegion?.slug);
+  const { data: ratings } = useSiteRatings();
+  const { data: finds } = useFinds();
   const [difficultyFilter, setDifficultyFilter] = useState<string>(ALL);
+  const [starFilter, setStarFilter] = useState<string>(ALL);
+  const [visitedFilter, setVisitedFilter] = useState<string>(ALL);
+
+  const ratingBySiteId = useMemo(() => {
+    const map = new Map<string, SiteRating>();
+    for (const r of ratings ?? []) map.set(r.siteId, r);
+    return map;
+  }, [ratings]);
+
+  // "Visited" = a site with at least one logged sighting, anywhere -- the
+  // same global find data the Fish tab/Collection use, not a separate
+  // per-site flag. See Find.siteIds (progressStore.getFinds).
+  const visitedSiteIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of finds ?? []) for (const siteId of f.siteIds) set.add(siteId);
+    return set;
+  }, [finds]);
 
   const filteredSites = useMemo(() => {
     if (!sites) return [];
-    if (difficultyFilter === ALL) return sites;
-    return sites.filter((s) => s.difficulty === difficultyFilter);
-  }, [sites, difficultyFilter]);
+    return sites.filter((s) => {
+      if (difficultyFilter !== ALL && s.difficulty !== difficultyFilter) return false;
+      if (starFilter !== ALL) {
+        const rating = ratingBySiteId.get(s.id);
+        if (!rating || rating.rating < Number(starFilter)) return false;
+      }
+      if (visitedFilter === 'Visited' && !visitedSiteIds.has(s.id)) return false;
+      if (visitedFilter === 'Unvisited' && visitedSiteIds.has(s.id)) return false;
+      return true;
+    });
+  }, [sites, difficultyFilter, starFilter, visitedFilter, ratingBySiteId, visitedSiteIds]);
 
   const groups = groupSitesByArea(filteredSites);
 
@@ -130,6 +186,42 @@ export default function SitesScreen() {
               />
             )}
 
+            {!isLoading && (
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={[ALL, ...STAR_OPTIONS]}
+                keyExtractor={(item) => `star-${item}`}
+                contentContainerStyle={styles.chipRow}
+                renderItem={({ item }) => {
+                  const label = item === ALL ? ALL : item === 5 ? '5★' : `${item}★+`;
+                  const value = String(item);
+                  return (
+                    <FilterChip label={label} selected={starFilter === value} onPress={() => setStarFilter(value)} />
+                  );
+                }}
+                style={styles.chipList}
+              />
+            )}
+
+            {!isLoading && (
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={[ALL, ...VISITED_OPTIONS]}
+                keyExtractor={(item) => `visited-${item}`}
+                contentContainerStyle={styles.chipRow}
+                renderItem={({ item }) => (
+                  <FilterChip
+                    label={item}
+                    selected={visitedFilter === item}
+                    onPress={() => setVisitedFilter(item)}
+                  />
+                )}
+                style={styles.chipList}
+              />
+            )}
+
             {isLoading && (
               <ThemedText type="small" themeColor="textSecondary">
                 Loading dive sites…
@@ -150,7 +242,12 @@ export default function SitesScreen() {
                   </ThemedText>
                   <View style={styles.rowList}>
                     {areaSites.map((site) => (
-                      <SiteRow key={site.id} site={site} />
+                      <SiteRow
+                        key={site.id}
+                        site={site}
+                        rating={ratingBySiteId.get(site.id)}
+                        visited={visitedSiteIds.has(site.id)}
+                      />
                     ))}
                   </View>
                 </Fragment>
@@ -205,5 +302,17 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     paddingVertical: Spacing.half,
     paddingHorizontal: Spacing.two,
+  },
+  reviewPreview: {
+    gap: Spacing.half,
+    marginTop: Spacing.half,
+  },
+  starRow: {
+    flexDirection: 'row',
+    gap: Spacing.half,
+  },
+  star: {
+    fontSize: 14,
+    lineHeight: 18,
   },
 });
