@@ -19,7 +19,7 @@ export default function ProfileScreen() {
           <View style={styles.identity}>
             <ThemedText type="title">Fish Catcher</ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
-              Your dive companion for Sharm el Sheikh, Ras Mohammed & the Straits of Tiran.
+              Your dive companion across the Red Sea and Israel's Mediterranean coast.
             </ThemedText>
           </View>
 
@@ -32,10 +32,11 @@ export default function ProfileScreen() {
             <ThemedText type="smallBold">About</ThemedText>
             <ThemedView type="backgroundElement" style={[styles.aboutCard, { borderColor: theme.border }]}>
               <ThemedText type="default" themeColor="textSecondary">
-                Fish Catcher catalogs real marine species found around Sharm el Sheikh dive sites, including Ras
-                Mohammed, the Straits of Tiran, and the local house reefs. Mark species as found as you spot
-                them, upload your own photos to build a personal gallery, and rate and annotate the dive
-                sites you explore.
+                Fish Catcher catalogs real marine species across four dive regions: Sharm el Sheikh and Dahab
+                in Egypt's Red Sea, and Eilat and the Mediterranean coast in Israel. Mark a species as found
+                once and it's in your collection everywhere -- the app still remembers exactly where you saw
+                it. Upload your own photos to build a personal gallery, and rate and annotate the dive sites
+                you explore.
               </ThemedText>
             </ThemedView>
           </View>

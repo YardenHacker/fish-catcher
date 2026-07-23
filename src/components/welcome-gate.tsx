@@ -14,7 +14,7 @@ export function WelcomeGate({ onSkip }: { onSkip: () => void }) {
           <View style={styles.identity}>
             <ThemedText type="title">🎣 Fish Catcher</ThemedText>
             <ThemedText type="default" themeColor="textSecondary">
-              Your dive companion for Sharm el Sheikh, Ras Mohammed & the Straits of Tiran. Sign in so your
+              Your dive companion across the Red Sea and Israel's Mediterranean coast. Sign in so your
               found species, photos, and site ratings follow you across devices.
             </ThemedText>
           </View>

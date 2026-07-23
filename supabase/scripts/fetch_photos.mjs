@@ -35,11 +35,19 @@ async function fetchWithRetry(url, options, retries = 3) {
 }
 
 async function fromINaturalist(sciName) {
-  const url = `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciName)}&rank=species&per_page=1`
+  // iNaturalist's `q` search is a fuzzy text match, not an exact scientific-name
+  // lookup -- it ranks by popularity/observation count, so a query like
+  // "Monachus monachus" (Mediterranean Monk Seal) can come back with an
+  // unrelated species that merely shares the epithet "monachus" (e.g. the
+  // Monk Parakeet, Myiopsitta monachus) ranked above the actual target, or
+  // the target may not appear in the first page at all. Blindly taking
+  // results[0] silently attaches the wrong animal's photo. Guard by only
+  // accepting a result whose own scientific name matches the query.
+  const url = `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sciName)}&rank=species&per_page=10`
   const res = await fetchWithRetry(url, { headers: { 'User-Agent': 'FishCatcher/1.0 (seed pipeline)' } })
   if (!res.ok) return null
   const data = await res.json()
-  const taxon = data.results?.[0]
+  const taxon = data.results?.find((t) => (t.name || '').toLowerCase() === sciName.toLowerCase())
   const photo = taxon?.default_photo
   if (!photo || !OK_LICENSES.has((photo.license_code || '').toLowerCase())) return null
   return {
@@ -52,7 +60,10 @@ async function fromINaturalist(sciName) {
 
 async function fromWikimedia(sciName) {
   // Grab the lead image of the species' Wikipedia page (Commons-hosted, CC/PD).
-  const api = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=original&titles=${encodeURIComponent(sciName)}&origin=*`
+  // redirects=1 is required: most species articles are titled by common name
+  // (e.g. "Monachus monachus" redirects to "Mediterranean monk seal"), and
+  // without it the query silently returns no image for any such species.
+  const api = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=original&titles=${encodeURIComponent(sciName)}&redirects=1&origin=*`
   const res = await fetchWithRetry(api, { headers: { 'User-Agent': 'FishCatcher/1.0'} })
   if (!res.ok) return null
   const data = await res.json()

@@ -1,9 +1,15 @@
 import * as Location from 'expo-location';
 import { Link } from 'expo-router';
 import type LType from 'leaflet';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { MapContainer as MapContainerType, Marker as MarkerType, Popup as PopupType, TileLayer as TileLayerType } from 'react-leaflet';
+import type {
+  MapContainer as MapContainerType,
+  Marker as MarkerType,
+  Popup as PopupType,
+  TileLayer as TileLayerType,
+  useMap as useMapType,
+} from 'react-leaflet';
 
 import { RegionSwitcher } from '@/components/region-switcher';
 import { ThemedText } from '@/components/themed-text';
@@ -83,6 +89,7 @@ interface LeafletBundle {
   Marker: typeof MarkerType;
   Popup: typeof PopupType;
   userIcon: LType.Icon;
+  RecenterOnRegionChange: React.ComponentType<{ center: [number, number]; zoom: number }>;
 }
 
 function loadLeafletSync() {
@@ -90,6 +97,29 @@ function loadLeafletSync() {
   const reactLeaflet: typeof import('react-leaflet') = require('react-leaflet');
   require('leaflet/dist/leaflet.css');
   return { L, reactLeaflet };
+}
+
+// MapContainer's `center`/`zoom` props only set the *initial* view -- Leaflet
+// treats the map as uncontrolled after creation, so switching regions
+// wouldn't otherwise move the already-mounted map. This invisible child (only
+// valid inside a MapContainer, where react-leaflet's useMap() resolves) flies
+// to the new center whenever it changes, skipping the animation on its own
+// first mount since MapContainer's initial center prop already handles that.
+function makeRecenterComponent(useMap: typeof useMapType) {
+  return function RecenterOnRegionChange({ center, zoom }: { center: [number, number]; zoom: number }) {
+    const map = useMap();
+    const isFirstRender = useRef(true);
+
+    useEffect(() => {
+      if (isFirstRender.current) {
+        isFirstRender.current = false;
+        return;
+      }
+      map.flyTo(center, zoom);
+    }, [center, zoom, map]);
+
+    return null;
+  };
 }
 
 export default function MapScreen() {
@@ -154,6 +184,7 @@ export default function MapScreen() {
           Marker: reactLeaflet.Marker,
           Popup: reactLeaflet.Popup,
           userIcon,
+          RecenterOnRegionChange: makeRecenterComponent(reactLeaflet.useMap),
         });
       }
     } catch {
@@ -241,6 +272,7 @@ export default function MapScreen() {
       {!isLoading && leaflet && (
         <View style={styles.mapContainer}>
           <leaflet.MapContainer center={center} zoom={DEFAULT_ZOOM} style={styles.map}>
+            <leaflet.RecenterOnRegionChange center={center} zoom={DEFAULT_ZOOM} />
             <leaflet.TileLayer
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               attribution="&copy; OpenStreetMap contributors &copy; CARTO"
