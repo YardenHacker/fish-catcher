@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CornerFrame } from '@/components/corner-frame';
 import { RarityTag } from '@/components/rarity-tag';
+import { ScreenBackground } from '@/components/screen-background';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -69,6 +70,7 @@ export default function CollectionScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <ScreenBackground source={require('@/assets/images/backgrounds/collection.jpg')} />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <ThemedText type="title">My Collection</ThemedText>

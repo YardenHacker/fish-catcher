@@ -1,6 +1,7 @@
 import { Pressable, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ScreenBackground } from '@/components/screen-background';
 import { SignInForm } from '@/components/sign-in-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -14,6 +15,7 @@ export default function ProfileScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <ScreenBackground source={require('@/assets/images/backgrounds/profile.jpg')} />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           <View style={styles.identity}>

@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CornerFrame } from '@/components/corner-frame';
 import { RarityTag } from '@/components/rarity-tag';
 import { RegionSwitcher } from '@/components/region-switcher';
+import { ScreenBackground } from '@/components/screen-background';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -177,6 +178,7 @@ export default function FishScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <ScreenBackground source={require('@/assets/images/backgrounds/fish.jpg')} />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <ThemedText type="title">Fish</ThemedText>
