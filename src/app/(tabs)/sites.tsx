@@ -3,7 +3,6 @@ import { Fragment, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { RegionSwitcher } from '@/components/region-switcher';
 import { ScreenBackground } from '@/components/screen-background';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -168,7 +167,6 @@ export default function SitesScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
             <ThemedText type="title">Dive Sites</ThemedText>
-            <RegionSwitcher />
 
             {!isLoading && (
               <FlatList

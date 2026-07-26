@@ -18,6 +18,21 @@ import type { Region } from './data/types';
 
 const ACTIVE_REGION_STORAGE_KEY = 'reefdex.activeRegion';
 
+/**
+ * Which country each region belongs to. Not modeled server-side -- with only
+ * two countries and four regions today, a client-side map is simpler than a
+ * schema/migration change. A new region just needs an entry added here
+ * alongside its seed data. Shared by the Area tab (the country/area picker
+ * page) -- there's no other UI surface for switching regions anymore.
+ */
+export const REGION_COUNTRY: Record<string, string> = {
+  'sharm-el-sheikh': 'Egypt',
+  dahab: 'Egypt',
+  eilat: 'Israel',
+  mediterranean: 'Israel',
+};
+export const COUNTRY_ORDER = ['Israel', 'Egypt'];
+
 interface RegionContextValue {
   regions: Region[];
   /** True until both the regions list has loaded once and the persisted choice has been read. */

@@ -1,5 +1,7 @@
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, useLocalSearchParams } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,11 +10,12 @@ import { CollapsiblePicker, ToggleRow } from '@/components/collapsible-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { UserMediaThumbnail } from '@/components/user-media-thumbnail';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   RARITY_TIER_COLOR,
   useAddUserPhoto,
+  usePublicReviewsForSite,
   useRateSite,
   useSetSightingCount,
   useSightingsForSite,
@@ -21,7 +24,7 @@ import {
   useSpeciesList,
   useUserPhotos,
 } from '@/lib/data';
-import type { Species } from '@/lib/data';
+import type { PublicReview, Species } from '@/lib/data';
 
 function Badge({ label }: { label: string }) {
   return (
@@ -105,6 +108,68 @@ function StarRating({ rating, onChange }: { rating: number; onChange: (value: nu
   );
 }
 
+function ReadOnlyStars({ rating }: { rating: number }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.starRow}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        <ThemedText key={value} style={[styles.reviewStar, { color: theme.text }]}>
+          {value <= rating ? '★' : '☆'}
+        </ThemedText>
+      ))}
+    </View>
+  );
+}
+
+function ReadOnlyVideoThumbnail({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri);
+  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls />;
+}
+
+/** Someone else's photo/video -- no delete affordance, unlike UserMediaThumbnail (which is for your own media). */
+function ReadOnlyMediaThumbnail({ photo }: { photo: PublicReview['photos'][number] }) {
+  return (
+    <View style={styles.reviewThumbnail}>
+      {photo.mediaType === 'video' ? (
+        <ReadOnlyVideoThumbnail uri={photo.uri} />
+      ) : (
+        <Image source={{ uri: photo.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      )}
+    </View>
+  );
+}
+
+function ReviewCard({ review }: { review: PublicReview }) {
+  const theme = useTheme();
+  const visitedDate = new Date(review.visitedAt).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  return (
+    <ThemedView type="backgroundElement" style={[styles.reviewCard, { borderColor: theme.border }]}>
+      <View style={styles.reviewHeader}>
+        <ThemedText type="smallBold">{review.displayName}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          Dove here {visitedDate}
+        </ThemedText>
+      </View>
+      <ReadOnlyStars rating={review.rating} />
+      {review.notes && <ThemedText type="default">{review.notes}</ThemedText>}
+      {review.photos.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.photoRow}>
+            {review.photos.map((photo) => (
+              <ReadOnlyMediaThumbnail key={photo.id} photo={photo} />
+            ))}
+          </View>
+        </ScrollView>
+      )}
+    </ThemedView>
+  );
+}
+
 export default function SiteDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { data: site, isLoading: isSiteLoading } = useSite(slug);
@@ -115,6 +180,7 @@ export default function SiteDetailScreen() {
   const { data: sightings, isLoading: isSightingsLoading } = useSightingsForSite(site?.id);
   const { data: speciesList, isLoading: isSpeciesLoading } = useSpeciesList();
   const setSightingCount = useSetSightingCount();
+  const { data: publicReviews } = usePublicReviewsForSite(site?.id);
 
   // Every species is listed here (not just a curated catalog subset), sorted
   // with whatever's already logged at this site first -- this list is both
@@ -331,6 +397,22 @@ export default function SiteDetailScreen() {
                 </ThemedText>
               )}
             </View>
+
+            <ThemedText type="subtitle" style={styles.sectionHeader}>
+              Reviews from other divers
+            </ThemedText>
+            {publicReviews && publicReviews.length > 0 ? (
+              <View style={styles.reviewList}>
+                {publicReviews.map((review) => (
+                  <ReviewCard key={review.userId} review={review} />
+                ))}
+              </View>
+            ) : (
+              <ThemedText type="small" themeColor="textSecondary">
+                No public reviews yet — reviews only show up here once someone turns on "Make my reviews &
+                photos public" in their Profile.
+              </ThemedText>
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -430,5 +512,31 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.four,
     alignSelf: 'flex-start',
+  },
+  reviewList: {
+    gap: Spacing.three,
+  },
+  reviewCard: {
+    borderRadius: Radii.large,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.one,
+  },
+  reviewStar: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  reviewThumbnail: {
+    width: 100,
+    height: 100,
+    borderRadius: Spacing.two,
+    overflow: 'hidden',
   },
 });

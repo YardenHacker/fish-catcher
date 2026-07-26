@@ -111,3 +111,25 @@ export interface SiteRating {
   notes?: string;
   updatedAt: string;
 }
+
+/** The current user's own public-facing profile settings (migration 0008). */
+export interface Profile {
+  displayName?: string;
+  /** Whether this user's ratings/notes/photos are visible to other users. Off by default. */
+  reviewsPublic: boolean;
+}
+
+/**
+ * One other user's public review of a site -- only ever returned for users
+ * who've opted into `reviewsPublic` (enforced by RLS, not just this app's
+ * UI). `visitedAt` reuses the rating's own timestamp as the "dive date"
+ * rather than a separate dive-log entry, which doesn't exist yet.
+ */
+export interface PublicReview {
+  userId: string;
+  displayName: string;
+  rating: number;
+  notes?: string;
+  visitedAt: string;
+  photos: { id: string; uri: string; mediaType: MediaType }[];
+}

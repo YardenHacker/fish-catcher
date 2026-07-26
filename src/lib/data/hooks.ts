@@ -236,3 +236,34 @@ export function useRateSite() {
     },
   });
 }
+
+// ---------- Profile / public reviews ----------
+
+export function useProfile() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['profile', user?.id ?? 'local'],
+    queryFn: () => progress.getProfile(),
+  });
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: (updates: { displayName?: string; reviewsPublic?: boolean }) => progress.updateProfile(updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id ?? 'local'] });
+    },
+  });
+}
+
+/** Every opted-in user's review of one site (not just the current user's own). See progressStore.getPublicReviewsForSite. */
+export function usePublicReviewsForSite(siteId: string | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['public-reviews', user?.id ?? 'local', siteId],
+    queryFn: () => progress.getPublicReviewsForSite(siteId!),
+    enabled: Boolean(siteId),
+  });
+}

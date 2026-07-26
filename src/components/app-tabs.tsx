@@ -32,6 +32,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="star.fill" md="star" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="area">
+        <NativeTabs.Trigger.Label>Area</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="globe" md="public" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="profile">
         <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="person.fill" md="account_circle" />

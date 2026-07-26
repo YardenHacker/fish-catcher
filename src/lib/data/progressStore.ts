@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSupabaseConfigured, supabase } from '../supabase';
 
 import * as repo from './repository';
-import { Find, MediaType, Sighting, SiteRating, UserPhoto } from './types';
+import { Find, MediaType, Profile, PublicReview, Sighting, SiteRating, UserPhoto } from './types';
 
 const KEYS = {
   sightings: 'reefdex.sightings',
@@ -473,4 +473,114 @@ export async function rateSite(siteId: string, rating: number, notes?: string): 
   const updated: SiteRating = { siteId, rating, notes, updatedAt };
   await writeJson(KEYS.ratings, [...ratings.filter((r) => r.siteId !== siteId), updated]);
   return updated;
+}
+
+// ---------- Profile (public-reviews opt-in) ----------
+// No offline fallback here -- there's no meaningful "local" version of a
+// setting that only matters once other people can see your data, and public
+// reviews from *other* users can only ever come from Supabase (there's
+// nothing to fall back to locally by definition).
+
+export async function getProfile(): Promise<Profile> {
+  const userId = await getUserId();
+  if (!userId || !supabase) return { reviewsPublic: false };
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('display_name, reviews_public')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return {
+    displayName: data?.display_name ?? undefined,
+    reviewsPublic: data?.reviews_public ?? false,
+  };
+}
+
+export async function updateProfile(updates: { displayName?: string; reviewsPublic?: boolean }): Promise<Profile> {
+  const userId = await getUserId();
+  if (!userId || !supabase) throw new Error('Sign in to update your profile.');
+
+  const patch: Record<string, unknown> = { user_id: userId };
+  if (updates.displayName !== undefined) patch.display_name = updates.displayName;
+  if (updates.reviewsPublic !== undefined) patch.reviews_public = updates.reviewsPublic;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(patch, { onConflict: 'user_id' })
+    .select('display_name, reviews_public')
+    .single();
+  if (error) throw error;
+  return {
+    displayName: data.display_name ?? undefined,
+    reviewsPublic: data.reviews_public ?? false,
+  };
+}
+
+/**
+ * Every opted-in user's review of one site -- reads across all users via the
+ * RLS policies added in migration 0008 (ratings_read_if_public,
+ * photos_read_if_public, profiles_read_if_public), not just the current
+ * user's own rows. Returns [] when signed out or Supabase isn't configured,
+ * since "other people's public reviews" has no offline meaning.
+ */
+export async function getPublicReviewsForSite(siteId: string): Promise<PublicReview[]> {
+  const userId = await getUserId();
+  if (!userId || !supabase) return [];
+
+  const { data: ratingRows, error: ratingsErr } = await supabase
+    .from('site_ratings')
+    .select('user_id, rating, notes, updated_at')
+    .eq('site_id', siteId)
+    .order('updated_at', { ascending: false });
+  if (ratingsErr) throw ratingsErr;
+  if (!ratingRows || ratingRows.length === 0) return [];
+
+  const userIds = ratingRows.map((r: any) => r.user_id);
+
+  // No direct FK between site_ratings and profiles (both reference
+  // auth.users independently), so PostgREST can't auto-embed the join --
+  // fetch display names in a separate query and join client-side instead.
+  const { data: profileRows, error: profilesErr } = await supabase
+    .from('profiles')
+    .select('user_id, display_name')
+    .in('user_id', userIds);
+  if (profilesErr) throw profilesErr;
+  const nameByUser = new Map((profileRows ?? []).map((p: any) => [p.user_id, p.display_name]));
+
+  const { data: photoRows, error: photosErr } = await supabase
+    .from('user_photos')
+    .select('id, user_id, storage_path, media_type, taken_at')
+    .eq('site_id', siteId)
+    .in('user_id', userIds);
+  if (photosErr) throw photosErr;
+
+  const photosByUser = new Map<string, any[]>();
+  for (const row of photoRows ?? []) {
+    const list = photosByUser.get(row.user_id) ?? [];
+    list.push(row);
+    photosByUser.set(row.user_id, list);
+  }
+
+  const reviews: PublicReview[] = [];
+  for (const r of ratingRows as any[]) {
+    const rawPhotos = photosByUser.get(r.user_id) ?? [];
+    const signedPhotos = await Promise.all(
+      rawPhotos.map(async (p) => {
+        const { data: signedUrl } = await supabase!.storage
+          .from('user-photos')
+          .createSignedUrl(p.storage_path, SIGNED_URL_TTL_SECONDS);
+        return { id: p.id, uri: signedUrl?.signedUrl ?? '', mediaType: (p.media_type as MediaType | null) ?? 'photo' };
+      }),
+    );
+    reviews.push({
+      userId: r.user_id,
+      displayName: nameByUser.get(r.user_id) || 'A Fish Catcher diver',
+      rating: r.rating,
+      notes: r.notes ?? undefined,
+      visitedAt: r.updated_at,
+      photos: signedPhotos.filter((p) => p.uri),
+    });
+  }
+  return reviews;
 }

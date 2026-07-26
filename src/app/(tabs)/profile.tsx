@@ -1,4 +1,5 @@
-import { Pressable, View, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, Switch, TextInput, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ScreenBackground } from '@/components/screen-background';
@@ -8,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth/AuthProvider';
+import { useProfile, useUpdateProfile } from '@/lib/data';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 export default function ProfileScreen() {
@@ -28,6 +30,11 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <ThemedText type="smallBold">Data & Sync</ThemedText>
             <SyncSection />
+          </View>
+
+          <View style={styles.section}>
+            <ThemedText type="smallBold">Public Profile</ThemedText>
+            <PublicProfileSection />
           </View>
 
           <View style={styles.section}>
@@ -96,6 +103,79 @@ function SyncSection() {
   return <SignInForm />;
 }
 
+/**
+ * Reviews/photos are private by default (RLS-enforced, migration 0008) --
+ * this is the one place a user explicitly opts in to making them visible to
+ * everyone else. Not rendered for signed-out users: there's no profile row
+ * without an account, and "public" only means something once other signed-in
+ * users can actually see it.
+ */
+function PublicProfileSection() {
+  const theme = useTheme();
+  const { user } = useAuth();
+  const { data: profile, isLoading } = useProfile();
+  const updateProfile = useUpdateProfile();
+  const [displayName, setDisplayName] = useState('');
+
+  useEffect(() => {
+    setDisplayName(profile?.displayName ?? '');
+  }, [profile?.displayName]);
+
+  if (!user) {
+    return (
+      <ThemedText type="small" themeColor="textSecondary">
+        Sign in to set a display name and share your reviews publicly.
+      </ThemedText>
+    );
+  }
+
+  if (isLoading || !profile) {
+    return (
+      <ThemedText type="small" themeColor="textSecondary">
+        Loading…
+      </ThemedText>
+    );
+  }
+
+  const nameChanged = displayName.trim() !== (profile.displayName ?? '');
+
+  return (
+    <View style={{ gap: Spacing.two }}>
+      <View style={styles.nameRow}>
+        <TextInput
+          style={[styles.nameInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+          placeholder="Add a display name"
+          placeholderTextColor={theme.textSecondary}
+          value={displayName}
+          onChangeText={setDisplayName}
+        />
+        {nameChanged && (
+          <Pressable
+            style={[styles.secondaryButton, styles.saveNameButton, { borderColor: theme.border }]}
+            onPress={() => updateProfile.mutate({ displayName: displayName.trim() })}>
+            <ThemedText type="smallBold">Save</ThemedText>
+          </Pressable>
+        )}
+      </View>
+
+      <ThemedView type="backgroundElement" style={[styles.statusRow, { borderColor: theme.border }]}>
+        <View style={styles.statusTextGroup}>
+          <ThemedText type="default">Make my reviews & photos public</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            When on, other Fish Catcher users can see your star ratings, notes, dive dates, and photos on
+            any site you've reviewed -- under the display name above. Off by default.
+          </ThemedText>
+        </View>
+        <Switch
+          value={profile.reviewsPublic}
+          onValueChange={(value) => updateProfile.mutate({ reviewsPublic: value })}
+          trackColor={{ false: theme.border, true: theme.accent }}
+        />
+      </ThemedView>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1, alignItems: 'center' },
@@ -148,5 +228,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: Spacing.two,
     alignItems: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    alignItems: 'center',
+  },
+  nameInput: {
+    flex: 1,
+    borderRadius: Radii.medium,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  saveNameButton: {
+    paddingHorizontal: Spacing.three,
   },
 });
