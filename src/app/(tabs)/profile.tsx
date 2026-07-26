@@ -6,6 +6,7 @@ import { ScreenBackground } from '@/components/screen-background';
 import { SignInForm } from '@/components/sign-in-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useToast } from '@/components/toast';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth/AuthProvider';
@@ -115,6 +116,7 @@ function PublicProfileSection() {
   const { user } = useAuth();
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
+  const { showToast } = useToast();
   const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
@@ -144,7 +146,7 @@ function PublicProfileSection() {
       <View style={styles.nameRow}>
         <TextInput
           style={[styles.nameInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
-          placeholder="Add a display name"
+          placeholder="Your name (shown on your public reviews)"
           placeholderTextColor={theme.textSecondary}
           value={displayName}
           onChangeText={setDisplayName}
@@ -152,7 +154,12 @@ function PublicProfileSection() {
         {nameChanged && (
           <Pressable
             style={[styles.secondaryButton, styles.saveNameButton, { borderColor: theme.border }]}
-            onPress={() => updateProfile.mutate({ displayName: displayName.trim() })}>
+            onPress={() =>
+              updateProfile.mutate(
+                { displayName: displayName.trim() },
+                { onSuccess: () => showToast('Name saved') },
+              )
+            }>
             <ThemedText type="smallBold">Save</ThemedText>
           </Pressable>
         )}
@@ -168,7 +175,12 @@ function PublicProfileSection() {
         </View>
         <Switch
           value={profile.reviewsPublic}
-          onValueChange={(value) => updateProfile.mutate({ reviewsPublic: value })}
+          onValueChange={(value) =>
+            updateProfile.mutate(
+              { reviewsPublic: value },
+              { onSuccess: () => showToast(value ? 'Reviews are now public' : 'Reviews are now private') },
+            )
+          }
           trackColor={{ false: theme.border, true: theme.accent }}
         />
       </ThemedView>

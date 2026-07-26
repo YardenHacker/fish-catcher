@@ -11,6 +11,7 @@ import type {
   useMap as useMapType,
 } from 'react-leaflet';
 
+import { AreaBadge } from '@/components/area-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radii, Spacing } from '@/constants/theme';
@@ -242,6 +243,7 @@ export default function MapScreen() {
         <ThemedText type="title" style={styles.title}>
           Dive Map
         </ThemedText>
+        <AreaBadge />
 
         {locationDenied && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.message}>

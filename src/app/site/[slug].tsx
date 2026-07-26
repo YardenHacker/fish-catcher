@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CollapsiblePicker, ToggleRow } from '@/components/collapsible-picker';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useToast } from '@/components/toast';
 import { UserMediaThumbnail } from '@/components/user-media-thumbnail';
 import { MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -175,6 +176,7 @@ export default function SiteDetailScreen() {
   const { data: site, isLoading: isSiteLoading } = useSite(slug);
   const { data: existingRating } = useSiteRating(site?.id);
   const rateSite = useRateSite();
+  const { showToast } = useToast();
   const { data: userPhotos } = useUserPhotos({ siteId: site?.id });
   const addUserPhoto = useAddUserPhoto();
   const { data: sightings, isLoading: isSightingsLoading } = useSightingsForSite(site?.id);
@@ -250,7 +252,10 @@ export default function SiteDetailScreen() {
     rateSite.mutate(
       { siteId: site.id, rating, notes: notes.trim() || undefined },
       {
-        onSuccess: () => setJustSaved(true),
+        onSuccess: () => {
+          setJustSaved(true);
+          showToast('Saved');
+        },
       },
     );
   }
@@ -267,14 +272,17 @@ export default function SiteDetailScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       const mediaType = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'photo';
-      addUserPhoto.mutate({
-        siteId: site.id,
-        speciesId,
-        uri: asset.uri,
-        mediaType,
-        mimeType: asset.mimeType,
-        fileName: asset.fileName,
-      });
+      addUserPhoto.mutate(
+        {
+          siteId: site.id,
+          speciesId,
+          uri: asset.uri,
+          mediaType,
+          mimeType: asset.mimeType,
+          fileName: asset.fileName,
+        },
+        { onSuccess: () => showToast(mediaType === 'video' ? 'Video added' : 'Photo added') },
+      );
     }
   }
 

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AreaBadge } from '@/components/area-badge';
 import { CornerFrame } from '@/components/corner-frame';
 import { RarityTag } from '@/components/rarity-tag';
 import { ScreenBackground } from '@/components/screen-background';
@@ -181,6 +182,7 @@ export default function FishScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <ThemedText type="title">Fish</ThemedText>
+          <AreaBadge />
           {/* Progress stays scoped to the whole catalog rather than the
               filtered set -- "found" is a personal, permanent milestone
               (species you've ever logged), and re-scoping it to whatever

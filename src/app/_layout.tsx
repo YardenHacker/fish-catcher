@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { ToastProvider } from '@/components/toast';
 import { WelcomeGate } from '@/components/welcome-gate';
 import { AuthProvider, useAuth } from '@/lib/auth/AuthProvider';
 import { RegionProvider } from '@/lib/region-context';
@@ -43,7 +44,7 @@ export default function RootLayout() {
         <RegionProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <AnimatedSplashOverlay />
-            {fontsLoaded && <AppShell />}
+            <ToastProvider>{fontsLoaded && <AppShell />}</ToastProvider>
           </ThemeProvider>
         </RegionProvider>
       </AuthProvider>

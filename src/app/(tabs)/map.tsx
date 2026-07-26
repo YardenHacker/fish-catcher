@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
+import { AreaBadge } from '@/components/area-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -241,6 +242,7 @@ export default function MapScreen() {
         <ThemedText type="title" style={styles.title}>
           Dive Map
         </ThemedText>
+        <AreaBadge />
 
         {locationDenied && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.message}>
