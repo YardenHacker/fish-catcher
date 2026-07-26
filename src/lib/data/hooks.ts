@@ -233,6 +233,9 @@ export function useRateSite() {
     onSuccess: (rating) => {
       queryClient.invalidateQueries({ queryKey: ['site-rating', user?.id ?? 'local', rating.siteId] });
       queryClient.invalidateQueries({ queryKey: ['site-ratings', user?.id ?? 'local'] });
+      // Partial key -- matches ['public-reviews', <any user>, rating.siteId], since a rating change can
+      // affect what anyone viewing this site's public reviews sees (if the rater is opted in).
+      queryClient.invalidateQueries({ queryKey: ['public-reviews'], predicate: (q) => q.queryKey[2] === rating.siteId });
     },
   });
 }
