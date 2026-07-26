@@ -172,6 +172,7 @@ export function useAddUserPhoto() {
       mediaType: MediaType;
       mimeType?: string | null;
       fileName?: string | null;
+      isPublic?: boolean;
     }) => {
       if (!activeRegion) throw new Error('No active region selected yet.');
       return progress.addUserPhoto({ ...target, regionId: activeRegion.id });
@@ -228,14 +229,16 @@ export function useRateSite() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: ({ siteId, rating, notes }: { siteId: string; rating: number; notes?: string }) =>
-      progress.rateSite(siteId, rating, notes),
+    mutationFn: ({ siteId, rating, notes, isPublic }: { siteId: string; rating: number; notes?: string; isPublic?: boolean }) =>
+      progress.rateSite(siteId, rating, notes, isPublic),
     onSuccess: (rating) => {
       queryClient.invalidateQueries({ queryKey: ['site-rating', user?.id ?? 'local', rating.siteId] });
       queryClient.invalidateQueries({ queryKey: ['site-ratings', user?.id ?? 'local'] });
-      // Partial key -- matches ['public-reviews', <any user>, rating.siteId], since a rating change can
-      // affect what anyone viewing this site's public reviews sees (if the rater is opted in).
+      // Partial key -- matches ['public-reviews', <any user>, rating.siteId], and ['activity-feed', <any
+      // region>] entirely, since a rating's public/private change can affect what anyone sees on this
+      // site's reviews or in the activity feed (a public rating also unlocks that user's finds there).
       queryClient.invalidateQueries({ queryKey: ['public-reviews'], predicate: (q) => q.queryKey[2] === rating.siteId });
+      queryClient.invalidateQueries({ queryKey: ['activity-feed'] });
     },
   });
 }
@@ -254,19 +257,28 @@ export function useUpdateProfile() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: (updates: { displayName?: string; reviewsPublic?: boolean }) => progress.updateProfile(updates),
+    mutationFn: (updates: { displayName?: string }) => progress.updateProfile(updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile', user?.id ?? 'local'] });
     },
   });
 }
 
-/** Every opted-in user's review of one site (not just the current user's own). See progressStore.getPublicReviewsForSite. */
+/** Every public review of one site (not just the current user's own). See progressStore.getPublicReviewsForSite. */
 export function usePublicReviewsForSite(siteId: string | undefined) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['public-reviews', user?.id ?? 'local', siteId],
     queryFn: () => progress.getPublicReviewsForSite(siteId!),
     enabled: Boolean(siteId),
+  });
+}
+
+/** Recent public activity (rare+ finds and site ratings) in one region. See progressStore.getActivityFeedForRegion. */
+export function useActivityFeedForRegion(regionId: string | undefined) {
+  return useQuery({
+    queryKey: ['activity-feed', regionId],
+    queryFn: () => progress.getActivityFeedForRegion(regionId!),
+    enabled: Boolean(regionId),
   });
 }

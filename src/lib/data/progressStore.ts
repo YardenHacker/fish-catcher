@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSupabaseConfigured, supabase } from '../supabase';
 
 import * as repo from './repository';
-import { Find, MediaType, Profile, PublicReview, Sighting, SiteRating, UserPhoto } from './types';
+import { ActivityEvent, Find, MediaType, Profile, PublicReview, RarityTier, Sighting, SiteRating, UserPhoto } from './types';
 
 const KEYS = {
   sightings: 'reefdex.sightings',
@@ -43,6 +43,7 @@ function mapRatingRow(row: any): SiteRating {
     rating: row.rating,
     notes: row.notes ?? undefined,
     updatedAt: row.updated_at,
+    isPublic: row.is_public ?? false,
   };
 }
 
@@ -312,6 +313,7 @@ export async function getUserPhotos(target: { speciesId?: string; siteId?: strin
           storagePath: row.storage_path,
           takenAt: row.taken_at ?? row.created_at,
           regionId: row.region_id ?? undefined,
+          isPublic: row.is_public ?? false,
         };
       }),
     );
@@ -342,8 +344,9 @@ export async function addUserPhoto(target: {
   mimeType?: string | null;
   fileName?: string | null;
   regionId: string;
+  isPublic?: boolean;
 }): Promise<UserPhoto> {
-  const { speciesId, siteId, uri, mediaType, mimeType, fileName, regionId } = target;
+  const { speciesId, siteId, uri, mediaType, mimeType, fileName, regionId, isPublic = false } = target;
   const userId = await getUserId();
   const contentType = resolveContentType(mediaType, mimeType);
 
@@ -366,6 +369,7 @@ export async function addUserPhoto(target: {
         storage_path: path,
         taken_at: takenAt,
         media_type: mediaType,
+        is_public: isPublic,
       })
       .select()
       .single();
@@ -381,6 +385,7 @@ export async function addUserPhoto(target: {
       mediaType,
       storagePath: path,
       takenAt,
+      isPublic,
     };
   }
 
@@ -452,7 +457,7 @@ export async function getSiteRating(siteId: string): Promise<SiteRating | null> 
   return ratings.find((r) => r.siteId === siteId) ?? null;
 }
 
-export async function rateSite(siteId: string, rating: number, notes?: string): Promise<SiteRating> {
+export async function rateSite(siteId: string, rating: number, notes?: string, isPublic = false): Promise<SiteRating> {
   const userId = await getUserId();
   const updatedAt = new Date().toISOString();
 
@@ -460,7 +465,7 @@ export async function rateSite(siteId: string, rating: number, notes?: string): 
     const { data, error } = await supabase
       .from('site_ratings')
       .upsert(
-        { user_id: userId, site_id: siteId, rating, notes: notes ?? null, updated_at: updatedAt },
+        { user_id: userId, site_id: siteId, rating, notes: notes ?? null, updated_at: updatedAt, is_public: isPublic },
         { onConflict: 'user_id,site_id' },
       )
       .select()
@@ -470,59 +475,45 @@ export async function rateSite(siteId: string, rating: number, notes?: string): 
   }
 
   const ratings = await readJson<SiteRating[]>(KEYS.ratings, []);
-  const updated: SiteRating = { siteId, rating, notes, updatedAt };
+  const updated: SiteRating = { siteId, rating, notes, updatedAt, isPublic: false };
   await writeJson(KEYS.ratings, [...ratings.filter((r) => r.siteId !== siteId), updated]);
   return updated;
 }
 
-// ---------- Profile (public-reviews opt-in) ----------
+// ---------- Profile ----------
 // No offline fallback here -- there's no meaningful "local" version of a
-// setting that only matters once other people can see your data, and public
-// reviews from *other* users can only ever come from Supabase (there's
-// nothing to fall back to locally by definition).
+// setting that only matters once other people can see your data.
 
 export async function getProfile(): Promise<Profile> {
   const userId = await getUserId();
-  if (!userId || !supabase) return { reviewsPublic: false };
+  if (!userId || !supabase) return {};
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('display_name, reviews_public')
-    .eq('user_id', userId)
-    .maybeSingle();
+  const { data, error } = await supabase.from('profiles').select('display_name').eq('user_id', userId).maybeSingle();
   if (error) throw error;
-  return {
-    displayName: data?.display_name ?? undefined,
-    reviewsPublic: data?.reviews_public ?? false,
-  };
+  return { displayName: data?.display_name ?? undefined };
 }
 
-export async function updateProfile(updates: { displayName?: string; reviewsPublic?: boolean }): Promise<Profile> {
+export async function updateProfile(updates: { displayName?: string }): Promise<Profile> {
   const userId = await getUserId();
   if (!userId || !supabase) throw new Error('Sign in to update your profile.');
 
   const patch: Record<string, unknown> = { user_id: userId };
   if (updates.displayName !== undefined) patch.display_name = updates.displayName;
-  if (updates.reviewsPublic !== undefined) patch.reviews_public = updates.reviewsPublic;
 
   const { data, error } = await supabase
     .from('profiles')
     .upsert(patch, { onConflict: 'user_id' })
-    .select('display_name, reviews_public')
+    .select('display_name')
     .single();
   if (error) throw error;
-  return {
-    displayName: data.display_name ?? undefined,
-    reviewsPublic: data.reviews_public ?? false,
-  };
+  return { displayName: data.display_name ?? undefined };
 }
 
 /**
- * Every opted-in user's review of one site -- reads across all users via the
- * RLS policies added in migration 0008 (ratings_read_if_public,
- * photos_read_if_public, profiles_read_if_public), not just the current
- * user's own rows. Returns [] when signed out or Supabase isn't configured,
- * since "other people's public reviews" has no offline meaning.
+ * Every public review of one site (migration 0010: is_public chosen per
+ * review at save time) -- reads across all users via RLS, not just the
+ * current user's own rows. Returns [] when signed out or Supabase isn't
+ * configured, since "other people's public reviews" has no offline meaning.
  */
 export async function getPublicReviewsForSite(siteId: string): Promise<PublicReview[]> {
   const userId = await getUserId();
@@ -583,4 +574,87 @@ export async function getPublicReviewsForSite(siteId: string): Promise<PublicRev
     });
   }
   return reviews;
+}
+
+const RARE_PLUS_TIERS = new Set<RarityTier>(['Rare', 'Epic', 'Legendary']);
+const ACTIVITY_FEED_LIMIT = 30;
+
+/**
+ * Recent public activity in one region: rare+ finds and site ratings.
+ * Sourced from sightings/site_ratings, both filtered to public rows entirely
+ * by RLS (migration 0010) -- a sighting only comes back once the same user
+ * has made their own rating of that site public, and a rating only comes
+ * back if it's public itself. This function just merges and sorts what the
+ * database already restricted, it doesn't do any visibility filtering itself.
+ */
+export async function getActivityFeedForRegion(regionId: string): Promise<ActivityEvent[]> {
+  if (!supabase) return [];
+
+  const { data: siteRows, error: sitesErr } = await supabase.from('sites').select('id, name').eq('region_id', regionId);
+  if (sitesErr) throw sitesErr;
+  const siteIds = (siteRows ?? []).map((s: any) => s.id);
+  if (siteIds.length === 0) return [];
+  const siteNameById = new Map((siteRows ?? []).map((s: any) => [s.id, s.name]));
+
+  const [{ data: sightingRows, error: sightingsErr }, { data: ratingRows, error: ratingsErr }] = await Promise.all([
+    supabase
+      .from('sightings')
+      .select('id, user_id, species_id, site_id, created_at')
+      .in('site_id', siteIds)
+      .order('created_at', { ascending: false })
+      .limit(ACTIVITY_FEED_LIMIT),
+    supabase
+      .from('site_ratings')
+      .select('user_id, site_id, rating, updated_at')
+      .in('site_id', siteIds)
+      .order('updated_at', { ascending: false })
+      .limit(ACTIVITY_FEED_LIMIT),
+  ]);
+  if (sightingsErr) throw sightingsErr;
+  if (ratingsErr) throw ratingsErr;
+
+  const speciesIds = [...new Set((sightingRows ?? []).map((r: any) => r.species_id))];
+  const { data: speciesRows, error: speciesErr } =
+    speciesIds.length > 0
+      ? await supabase.from('species').select('id, common_name, rarity_tier').in('id', speciesIds)
+      : { data: [], error: null };
+  if (speciesErr) throw speciesErr;
+  const speciesById = new Map((speciesRows ?? []).map((s: any) => [s.id, s]));
+
+  const userIds = [
+    ...new Set([...(sightingRows ?? []).map((r: any) => r.user_id), ...(ratingRows ?? []).map((r: any) => r.user_id)]),
+  ];
+  const { data: profileRows, error: profilesErr } =
+    userIds.length > 0
+      ? await supabase.from('profiles').select('user_id, display_name').in('user_id', userIds)
+      : { data: [], error: null };
+  if (profilesErr) throw profilesErr;
+  const nameByUser = new Map((profileRows ?? []).map((p: any) => [p.user_id, p.display_name]));
+
+  const events: ActivityEvent[] = [];
+  for (const r of sightingRows ?? []) {
+    const species = speciesById.get(r.species_id);
+    if (!species || !RARE_PLUS_TIERS.has(species.rarity_tier)) continue;
+    events.push({
+      kind: 'find',
+      id: r.id,
+      displayName: nameByUser.get(r.user_id) || 'A Fish Catcher diver',
+      speciesName: species.common_name,
+      rarityTier: species.rarity_tier,
+      siteName: siteNameById.get(r.site_id) ?? 'a dive site',
+      at: r.created_at,
+    });
+  }
+  for (const r of ratingRows ?? []) {
+    events.push({
+      kind: 'rating',
+      id: `${r.user_id}-${r.site_id}`,
+      displayName: nameByUser.get(r.user_id) || 'A Fish Catcher diver',
+      siteName: siteNameById.get(r.site_id) ?? 'a dive site',
+      rating: r.rating,
+      at: r.updated_at,
+    });
+  }
+  events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return events.slice(0, ACTIVITY_FEED_LIMIT);
 }

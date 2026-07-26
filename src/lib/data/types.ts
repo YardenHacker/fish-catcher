@@ -103,6 +103,8 @@ export interface UserPhoto {
    * belonging to the default region).
    */
   regionId?: string;
+  /** Whether this specific photo is visible to other users (migration 0010) -- chosen at upload time, off by default. */
+  isPublic?: boolean;
 }
 
 export interface SiteRating {
@@ -110,20 +112,20 @@ export interface SiteRating {
   rating: number;
   notes?: string;
   updatedAt: string;
+  /** Whether this specific review is visible to other users (migration 0010) -- chosen at save time, off by default. */
+  isPublic: boolean;
 }
 
-/** The current user's own public-facing profile settings (migration 0008). */
+/** The current user's own public-facing profile settings. */
 export interface Profile {
   displayName?: string;
-  /** Whether this user's ratings/notes/photos are visible to other users. Off by default. */
-  reviewsPublic: boolean;
 }
 
 /**
- * One other user's public review of a site -- only ever returned for users
- * who've opted into `reviewsPublic` (enforced by RLS, not just this app's
- * UI). `visitedAt` reuses the rating's own timestamp as the "dive date"
- * rather than a separate dive-log entry, which doesn't exist yet.
+ * One other user's public review of a site -- only ever returned for
+ * reviews marked public at save time (migration 0010, enforced by RLS, not
+ * just this app's UI). `visitedAt` reuses the rating's own timestamp as the
+ * "dive date" rather than a separate dive-log entry, which doesn't exist yet.
  */
 export interface PublicReview {
   userId: string;
@@ -133,3 +135,14 @@ export interface PublicReview {
   visitedAt: string;
   photos: { id: string; uri: string; mediaType: MediaType }[];
 }
+
+/**
+ * One entry in a region's activity feed -- a rare+ find or a public site
+ * rating. A find only ever appears once the same user has also made their
+ * rating of that same site public (see migration 0010's
+ * sightings_read_if_site_rating_public policy) -- RLS is what actually
+ * enforces this, not just this app's UI.
+ */
+export type ActivityEvent =
+  | { kind: 'find'; id: string; displayName: string; speciesName: string; rarityTier: RarityTier; siteName: string; at: string }
+  | { kind: 'rating'; id: string; displayName: string; siteName: string; rating: number; at: string };

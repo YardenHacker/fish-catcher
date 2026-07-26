@@ -140,6 +140,29 @@ function ReadOnlyMediaThumbnail({ photo }: { photo: PublicReview['photos'][numbe
   );
 }
 
+/** A public/private choice, shown wherever a review or photo/video is about to be saved (migration 0010: chosen per item, not one account-wide setting). */
+function PublicPrivateToggle({ isPublic, onChange }: { isPublic: boolean; onChange: (value: boolean) => void }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.visibilityRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+      <Pressable
+        onPress={() => onChange(false)}
+        style={[styles.visibilityPill, { backgroundColor: !isPublic ? theme.accent : 'transparent' }]}>
+        <ThemedText type="small" style={{ color: !isPublic ? theme.accentContrast : theme.textSecondary }}>
+          Private
+        </ThemedText>
+      </Pressable>
+      <Pressable
+        onPress={() => onChange(true)}
+        style={[styles.visibilityPill, { backgroundColor: isPublic ? theme.accent : 'transparent' }]}>
+        <ThemedText type="small" style={{ color: isPublic ? theme.accentContrast : theme.textSecondary }}>
+          Public
+        </ThemedText>
+      </Pressable>
+    </View>
+  );
+}
+
 function ReviewCard({ review }: { review: PublicReview }) {
   const theme = useTheme();
   const visitedDate = new Date(review.visitedAt).toLocaleDateString(undefined, {
@@ -206,13 +229,18 @@ export default function SiteDetailScreen() {
 
   const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState('');
+  const [reviewIsPublic, setReviewIsPublic] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [pickerMessage, setPickerMessage] = useState<string | null>(null);
+  // Shared default for every photo/video uploaded from this screen -- not
+  // re-asked per upload, just a visible, changeable choice before each one.
+  const [uploadIsPublic, setUploadIsPublic] = useState(false);
 
   useEffect(() => {
     if (existingRating) {
       setRating(existingRating.rating);
       setNotes(existingRating.notes ?? '');
+      setReviewIsPublic(existingRating.isPublic);
     }
   }, [existingRating]);
 
@@ -250,7 +278,7 @@ export default function SiteDetailScreen() {
     if (!site) return;
     setJustSaved(false);
     rateSite.mutate(
-      { siteId: site.id, rating, notes: notes.trim() || undefined },
+      { siteId: site.id, rating, notes: notes.trim() || undefined, isPublic: reviewIsPublic },
       {
         onSuccess: () => {
           setJustSaved(true);
@@ -280,6 +308,7 @@ export default function SiteDetailScreen() {
           mediaType,
           mimeType: asset.mimeType,
           fileName: asset.fileName,
+          isPublic: uploadIsPublic,
         },
         { onSuccess: () => showToast(mediaType === 'video' ? 'Video added' : 'Photo added') },
       );
@@ -361,6 +390,7 @@ export default function SiteDetailScreen() {
                 No photos yet.
               </ThemedText>
             )}
+            <PublicPrivateToggle isPublic={uploadIsPublic} onChange={setUploadIsPublic} />
             <Pressable
               onPress={() => pickAndUploadPhoto()}
               style={[styles.addPhotoButton, { backgroundColor: theme.accent }]}>
@@ -392,6 +422,8 @@ export default function SiteDetailScreen() {
               onChangeText={setNotes}
             />
 
+            <PublicPrivateToggle isPublic={reviewIsPublic} onChange={setReviewIsPublic} />
+
             <View style={styles.saveRow}>
               <Pressable
                 style={[styles.saveButton, { backgroundColor: theme.backgroundSelected }]}
@@ -406,21 +438,25 @@ export default function SiteDetailScreen() {
               )}
             </View>
 
-            <ThemedText type="subtitle" style={styles.sectionHeader}>
-              Reviews from other divers
-            </ThemedText>
-            {publicReviews && publicReviews.length > 0 ? (
-              <View style={styles.reviewList}>
-                {publicReviews.map((review) => (
-                  <ReviewCard key={review.userId} review={review} />
-                ))}
-              </View>
-            ) : (
-              <ThemedText type="small" themeColor="textSecondary">
-                No public reviews yet — reviews only show up here once someone turns on "Make my reviews &
-                photos public" in their Profile.
-              </ThemedText>
-            )}
+            <CollapsiblePicker
+              summary={
+                publicReviews && publicReviews.length > 0
+                  ? `See reviews (${publicReviews.length})`
+                  : 'See reviews'
+              }>
+              {publicReviews && publicReviews.length > 0 ? (
+                <View style={styles.reviewList}>
+                  {publicReviews.map((review) => (
+                    <ReviewCard key={review.userId} review={review} />
+                  ))}
+                </View>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.noReviewsText}>
+                  No public reviews yet — reviews only show up here once someone marks their review of
+                  this site as Public.
+                </ThemedText>
+              )}
+            </CollapsiblePicker>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -523,6 +559,22 @@ const styles = StyleSheet.create({
   },
   reviewList: {
     gap: Spacing.three,
+  },
+  noReviewsText: {
+    padding: Spacing.three,
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    borderRadius: Radii.large,
+    borderWidth: 1,
+    padding: Spacing.half,
+    gap: Spacing.half,
+  },
+  visibilityPill: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderRadius: Radii.medium,
   },
   reviewCard: {
     borderRadius: Radii.large,

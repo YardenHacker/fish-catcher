@@ -30,6 +30,9 @@ export default function AppTabs() {
           <TabTrigger name="collection" href="/collection" asChild>
             <TabButton icon="star-outline">Collection</TabButton>
           </TabTrigger>
+          <TabTrigger name="feed" href="/feed" asChild>
+            <TabButton icon="notifications-outline">Feed</TabButton>
+          </TabTrigger>
           <TabTrigger name="area" href="/area" asChild>
             <TabButton icon="earth-outline">Area</TabButton>
           </TabTrigger>

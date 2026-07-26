@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Switch, TextInput, View, StyleSheet } from 'react-native';
+import { Pressable, TextInput, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ScreenBackground } from '@/components/screen-background';
@@ -105,11 +105,10 @@ function SyncSection() {
 }
 
 /**
- * Reviews/photos are private by default (RLS-enforced, migration 0008) --
- * this is the one place a user explicitly opts in to making them visible to
- * everyone else. Not rendered for signed-out users: there's no profile row
- * without an account, and "public" only means something once other signed-in
- * users can actually see it.
+ * Just a display name here now -- whether any given review or photo is
+ * public is chosen per-item, right when you save it (migration 0010), not
+ * as one account-wide setting. Not rendered for signed-out users: there's
+ * no profile row without an account.
  */
 function PublicProfileSection() {
   const theme = useTheme();
@@ -126,7 +125,7 @@ function PublicProfileSection() {
   if (!user) {
     return (
       <ThemedText type="small" themeColor="textSecondary">
-        Sign in to set a display name and share your reviews publicly.
+        Sign in to set a display name -- shown whenever you choose to make a review or photo public.
       </ThemedText>
     );
   }
@@ -142,48 +141,23 @@ function PublicProfileSection() {
   const nameChanged = displayName.trim() !== (profile.displayName ?? '');
 
   return (
-    <View style={{ gap: Spacing.two }}>
-      <View style={styles.nameRow}>
-        <TextInput
-          style={[styles.nameInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
-          placeholder="Your name (shown on your public reviews)"
-          placeholderTextColor={theme.textSecondary}
-          value={displayName}
-          onChangeText={setDisplayName}
-        />
-        {nameChanged && (
-          <Pressable
-            style={[styles.secondaryButton, styles.saveNameButton, { borderColor: theme.border }]}
-            onPress={() =>
-              updateProfile.mutate(
-                { displayName: displayName.trim() },
-                { onSuccess: () => showToast('Name saved') },
-              )
-            }>
-            <ThemedText type="smallBold">Save</ThemedText>
-          </Pressable>
-        )}
-      </View>
-
-      <ThemedView type="backgroundElement" style={[styles.statusRow, { borderColor: theme.border }]}>
-        <View style={styles.statusTextGroup}>
-          <ThemedText type="default">Make my reviews & photos public</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            When on, other Fish Catcher users can see your star ratings, notes, dive dates, and photos on
-            any site you've reviewed -- under the display name above. Off by default.
-          </ThemedText>
-        </View>
-        <Switch
-          value={profile.reviewsPublic}
-          onValueChange={(value) =>
-            updateProfile.mutate(
-              { reviewsPublic: value },
-              { onSuccess: () => showToast(value ? 'Reviews are now public' : 'Reviews are now private') },
-            )
-          }
-          trackColor={{ false: theme.border, true: theme.accent }}
-        />
-      </ThemedView>
+    <View style={styles.nameRow}>
+      <TextInput
+        style={[styles.nameInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+        placeholder="Your name (shown on public reviews)"
+        placeholderTextColor={theme.textSecondary}
+        value={displayName}
+        onChangeText={setDisplayName}
+      />
+      {nameChanged && (
+        <Pressable
+          style={[styles.secondaryButton, styles.saveNameButton, { borderColor: theme.border }]}
+          onPress={() =>
+            updateProfile.mutate({ displayName: displayName.trim() }, { onSuccess: () => showToast('Name saved') })
+          }>
+          <ThemedText type="smallBold">Save</ThemedText>
+        </Pressable>
+      )}
     </View>
   );
 }
