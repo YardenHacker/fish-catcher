@@ -4,7 +4,7 @@ import { Pressable, StyleSheet } from 'react-native';
 
 import { Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useActiveRegion } from '@/lib/region-context';
+import { COUNTRY_FLAG, REGION_COUNTRY, useActiveRegion } from '@/lib/region-context';
 
 import { ThemedText } from './themed-text';
 
@@ -19,12 +19,13 @@ export function AreaBadge() {
   const activeRegion = useActiveRegion();
 
   if (!activeRegion) return null;
+  const flag = COUNTRY_FLAG[REGION_COUNTRY[activeRegion.slug]];
 
   return (
     <Link href="/area" asChild>
       <Pressable
         style={StyleSheet.flatten([styles.badge, { borderColor: theme.border, backgroundColor: theme.backgroundElement }])}>
-        <Ionicons name="earth-outline" size={14} color={theme.textSecondary} />
+        {flag ? <ThemedText type="mono">{flag}</ThemedText> : <Ionicons name="earth-outline" size={14} color={theme.textSecondary} />}
         <ThemedText type="mono" themeColor="textSecondary">
           {activeRegion.name.toUpperCase()}
         </ThemedText>

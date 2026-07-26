@@ -9,7 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useRegions } from '@/lib/data';
-import { COUNTRY_ORDER, REGION_COUNTRY, useActiveRegion, useSetActiveRegion } from '@/lib/region-context';
+import { COUNTRY_FLAG, COUNTRY_ORDER, REGION_COUNTRY, useActiveRegion, useSetActiveRegion } from '@/lib/region-context';
 import type { Region } from '@/lib/data';
 
 /**
@@ -92,6 +92,7 @@ function CountryCard({ label, selected, onPress }: { label: string; selected: bo
         type="backgroundElement"
         style={[styles.card, { borderColor: selected ? theme.accent : theme.border }]}>
         <ThemedText type="default" style={selected && styles.selectedLabel}>
+          {COUNTRY_FLAG[label] ? `${COUNTRY_FLAG[label]} ` : ''}
           {label}
         </ThemedText>
         {selected && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}

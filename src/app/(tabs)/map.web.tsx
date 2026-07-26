@@ -15,7 +15,7 @@ import { AreaBadge } from '@/components/area-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radii, Spacing } from '@/constants/theme';
-import { useSitesForRegion } from '@/lib/data';
+import { usePublicRatingSummaries, useSitesForRegion } from '@/lib/data';
 import { useActiveRegion } from '@/lib/region-context';
 
 // Sharm el Sheikh's default center/zoom, preserved exactly as-is for existing
@@ -125,6 +125,8 @@ function makeRecenterComponent(useMap: typeof useMapType) {
 export default function MapScreen() {
   const activeRegion = useActiveRegion();
   const { data: sites, isLoading: sitesLoading } = useSitesForRegion(activeRegion?.slug);
+  const { data: ratingSummaries } = usePublicRatingSummaries(sites?.map((s) => s.id));
+  const ratingBySiteId = useMemo(() => new Map((ratingSummaries ?? []).map((r) => [r.siteId, r])), [ratingSummaries]);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [leaflet, setLeaflet] = useState<LeafletBundle | null>(null);
@@ -281,19 +283,29 @@ export default function MapScreen() {
               detectRetina
             />
 
-            {(sites ?? []).map((site) => (
-              <leaflet.Marker
-                key={site.id}
-                position={[site.lat, site.lng]}
-                icon={areaPinIcon(leaflet.L, AREA_COLORS[site.area] ?? DEFAULT_AREA_COLOR)}>
-                <leaflet.Popup>
-                  <strong>{site.name}</strong>
-                  <div>
-                    <Link href={`/site/${site.slug}`}>View site</Link>
-                  </div>
-                </leaflet.Popup>
-              </leaflet.Marker>
-            ))}
+            {(sites ?? []).map((site) => {
+              const summary = ratingBySiteId.get(site.id);
+              return (
+                <leaflet.Marker
+                  key={site.id}
+                  position={[site.lat, site.lng]}
+                  icon={areaPinIcon(leaflet.L, AREA_COLORS[site.area] ?? DEFAULT_AREA_COLOR)}>
+                  <leaflet.Popup>
+                    <strong>{site.name}</strong>
+                    {summary && (
+                      <div>
+                        {'★'.repeat(Math.round(summary.average))}
+                        {'☆'.repeat(5 - Math.round(summary.average))} {summary.average.toFixed(1)} (
+                        {summary.count})
+                      </div>
+                    )}
+                    <div>
+                      <Link href={`/site/${site.slug}`}>View site</Link>
+                    </div>
+                  </leaflet.Popup>
+                </leaflet.Marker>
+              );
+            })}
 
             {userLocation && (
               <leaflet.Marker

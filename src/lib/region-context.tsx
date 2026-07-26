@@ -32,6 +32,10 @@ export const REGION_COUNTRY: Record<string, string> = {
   mediterranean: 'Israel',
 };
 export const COUNTRY_ORDER = ['Israel', 'Egypt'];
+export const COUNTRY_FLAG: Record<string, string> = {
+  Israel: '🇮🇱',
+  Egypt: '🇪🇬',
+};
 
 interface RegionContextValue {
   regions: Region[];

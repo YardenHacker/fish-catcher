@@ -16,13 +16,14 @@ import { useTheme } from '@/hooks/use-theme';
 import {
   RARITY_TIER_COLOR,
   useAddUserPhoto,
+  usePublicRatingSummaries,
   usePublicReviewsForSite,
   useRateSite,
   useSetSightingCount,
   useSightingsForSite,
   useSite,
   useSiteRating,
-  useSpeciesList,
+  useSpeciesForSite,
   useUserPhotos,
 } from '@/lib/data';
 import type { PublicReview, Species } from '@/lib/data';
@@ -203,13 +204,16 @@ export default function SiteDetailScreen() {
   const { data: userPhotos } = useUserPhotos({ siteId: site?.id });
   const addUserPhoto = useAddUserPhoto();
   const { data: sightings, isLoading: isSightingsLoading } = useSightingsForSite(site?.id);
-  const { data: speciesList, isLoading: isSpeciesLoading } = useSpeciesList();
+  const { data: speciesList, isLoading: isSpeciesLoading } = useSpeciesForSite(site?.slug);
   const setSightingCount = useSetSightingCount();
   const { data: publicReviews } = usePublicReviewsForSite(site?.id);
+  const { data: ratingSummaries } = usePublicRatingSummaries(site ? [site.id] : undefined);
+  const ratingSummary = ratingSummaries?.[0];
 
-  // Every species is listed here (not just a curated catalog subset), sorted
-  // with whatever's already logged at this site first -- this list is both
-  // the "what have I seen here" view and the way to mark a new sighting.
+  // Only species actually catalogued at this site (not the whole global
+  // list) -- otherwise this doubled as a way to mark any species from any
+  // region as seen at a site it has nothing to do with, sorted with
+  // whatever's already logged at this site first.
   const speciesWithCounts = useMemo(() => {
     const countBySpeciesId = new Map((sightings ?? []).map((s) => [s.speciesId, s.count]));
     const rows = (speciesList ?? []).map((sp) => ({ species: sp, count: countBySpeciesId.get(sp.id) ?? 0 }));
@@ -323,6 +327,16 @@ export default function SiteDetailScreen() {
             <ThemedText type="title" style={styles.siteName}>
               {site.name}
             </ThemedText>
+
+            {ratingSummary && (
+              <View style={styles.avgRatingRow}>
+                <ReadOnlyStars rating={Math.round(ratingSummary.average)} />
+                <ThemedText type="smallBold">{ratingSummary.average.toFixed(1)}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  ({ratingSummary.count} {ratingSummary.count === 1 ? 'review' : 'reviews'})
+                </ThemedText>
+              </View>
+            )}
 
             <View style={styles.badgeRow}>
               <Badge label={site.area} />
@@ -478,6 +492,11 @@ const styles = StyleSheet.create({
   siteName: {
     fontSize: 32,
     lineHeight: 38,
+  },
+  avgRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
   },
   badgeRow: {
     flexDirection: 'row',

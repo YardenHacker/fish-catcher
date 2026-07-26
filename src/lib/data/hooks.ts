@@ -235,10 +235,12 @@ export function useRateSite() {
       queryClient.invalidateQueries({ queryKey: ['site-rating', user?.id ?? 'local', rating.siteId] });
       queryClient.invalidateQueries({ queryKey: ['site-ratings', user?.id ?? 'local'] });
       // Partial key -- matches ['public-reviews', <any user>, rating.siteId], and ['activity-feed', <any
-      // region>] entirely, since a rating's public/private change can affect what anyone sees on this
-      // site's reviews or in the activity feed (a public rating also unlocks that user's finds there).
+      // region>] / ['public-rating-summaries', <any set>] entirely, since a rating's public/private
+      // change can affect what anyone sees on this site's reviews, average rating, or the activity feed
+      // (a public rating also unlocks that user's finds there).
       queryClient.invalidateQueries({ queryKey: ['public-reviews'], predicate: (q) => q.queryKey[2] === rating.siteId });
       queryClient.invalidateQueries({ queryKey: ['activity-feed'] });
+      queryClient.invalidateQueries({ queryKey: ['public-rating-summaries'] });
     },
   });
 }
@@ -274,11 +276,25 @@ export function usePublicReviewsForSite(siteId: string | undefined) {
   });
 }
 
-/** Recent public activity (rare+ finds and site ratings) in one region. See progressStore.getActivityFeedForRegion. */
+/** Recent public rare+ fish finds in one region (no site ratings -- see usePublicRatingSummaries for those). See progressStore.getActivityFeedForRegion. */
 export function useActivityFeedForRegion(regionId: string | undefined) {
   return useQuery({
     queryKey: ['activity-feed', regionId],
     queryFn: () => progress.getActivityFeedForRegion(regionId!),
     enabled: Boolean(regionId),
+  });
+}
+
+/**
+ * Aggregate public star rating (average + count) for each of the given
+ * sites -- a Google-Maps-style consensus number. Pass one site's id (site
+ * detail) or every site in a region (map). See progressStore.getPublicRatingSummaries.
+ */
+export function usePublicRatingSummaries(siteIds: string[] | undefined) {
+  const key = siteIds && siteIds.length > 0 ? [...siteIds].sort().join(',') : '';
+  return useQuery({
+    queryKey: ['public-rating-summaries', key],
+    queryFn: () => progress.getPublicRatingSummaries(siteIds!),
+    enabled: Boolean(siteIds && siteIds.length > 0),
   });
 }

@@ -3,7 +3,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSupabaseConfigured, supabase } from '../supabase';
 
 import * as repo from './repository';
-import { ActivityEvent, Find, MediaType, Profile, PublicReview, RarityTier, Sighting, SiteRating, UserPhoto } from './types';
+import {
+  ActivityEvent,
+  Find,
+  MediaType,
+  Profile,
+  PublicReview,
+  RarityTier,
+  Sighting,
+  SiteRating,
+  SiteRatingSummary,
+  UserPhoto,
+} from './types';
 
 const KEYS = {
   sightings: 'reefdex.sightings',
@@ -580,12 +591,13 @@ const RARE_PLUS_TIERS = new Set<RarityTier>(['Rare', 'Epic', 'Legendary']);
 const ACTIVITY_FEED_LIMIT = 30;
 
 /**
- * Recent public activity in one region: rare+ finds and site ratings.
- * Sourced from sightings/site_ratings, both filtered to public rows entirely
- * by RLS (migration 0010) -- a sighting only comes back once the same user
- * has made their own rating of that site public, and a rating only comes
- * back if it's public itself. This function just merges and sorts what the
- * database already restricted, it doesn't do any visibility filtering itself.
+ * Recent public rare+ fish finds in one region -- site ratings are
+ * deliberately not included here, this is a fish-sightings feed only (see
+ * usePublicRatingSummaries/getPublicRatingSummaries for aggregate site
+ * ratings instead). Sourced from sightings, filtered to public rows
+ * entirely by RLS -- a sighting only comes back once the same user has made
+ * their own rating of that site public. This function just filters by
+ * rarity and formats what the database already restricted to public rows.
  */
 export async function getActivityFeedForRegion(regionId: string): Promise<ActivityEvent[]> {
   if (!supabase) return [];
@@ -596,22 +608,13 @@ export async function getActivityFeedForRegion(regionId: string): Promise<Activi
   if (siteIds.length === 0) return [];
   const siteNameById = new Map((siteRows ?? []).map((s: any) => [s.id, s.name]));
 
-  const [{ data: sightingRows, error: sightingsErr }, { data: ratingRows, error: ratingsErr }] = await Promise.all([
-    supabase
-      .from('sightings')
-      .select('id, user_id, species_id, site_id, created_at')
-      .in('site_id', siteIds)
-      .order('created_at', { ascending: false })
-      .limit(ACTIVITY_FEED_LIMIT),
-    supabase
-      .from('site_ratings')
-      .select('user_id, site_id, rating, updated_at')
-      .in('site_id', siteIds)
-      .order('updated_at', { ascending: false })
-      .limit(ACTIVITY_FEED_LIMIT),
-  ]);
+  const { data: sightingRows, error: sightingsErr } = await supabase
+    .from('sightings')
+    .select('id, user_id, species_id, site_id, created_at')
+    .in('site_id', siteIds)
+    .order('created_at', { ascending: false })
+    .limit(ACTIVITY_FEED_LIMIT);
   if (sightingsErr) throw sightingsErr;
-  if (ratingsErr) throw ratingsErr;
 
   const speciesIds = [...new Set((sightingRows ?? []).map((r: any) => r.species_id))];
   const { data: speciesRows, error: speciesErr } =
@@ -621,9 +624,7 @@ export async function getActivityFeedForRegion(regionId: string): Promise<Activi
   if (speciesErr) throw speciesErr;
   const speciesById = new Map((speciesRows ?? []).map((s: any) => [s.id, s]));
 
-  const userIds = [
-    ...new Set([...(sightingRows ?? []).map((r: any) => r.user_id), ...(ratingRows ?? []).map((r: any) => r.user_id)]),
-  ];
+  const userIds = [...new Set((sightingRows ?? []).map((r: any) => r.user_id))];
   const { data: profileRows, error: profilesErr } =
     userIds.length > 0
       ? await supabase.from('profiles').select('user_id, display_name').in('user_id', userIds)
@@ -645,16 +646,38 @@ export async function getActivityFeedForRegion(regionId: string): Promise<Activi
       at: r.created_at,
     });
   }
-  for (const r of ratingRows ?? []) {
-    events.push({
-      kind: 'rating',
-      id: `${r.user_id}-${r.site_id}`,
-      displayName: nameByUser.get(r.user_id) || 'A Fish Catcher diver',
-      siteName: siteNameById.get(r.site_id) ?? 'a dive site',
-      rating: r.rating,
-      at: r.updated_at,
-    });
-  }
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   return events.slice(0, ACTIVITY_FEED_LIMIT);
+}
+
+const RATING_SUMMARY_LIMIT_SITES = 500;
+
+/**
+ * Aggregate public star rating (average + count) per site -- a Google-Maps-
+ * style consensus number, computed only from ratings marked public
+ * (migration 0009's is_public), regardless of who's viewing. Returns one
+ * entry per site that has at least one public rating; sites with none are
+ * simply absent from the result (not a zero-average entry).
+ */
+export async function getPublicRatingSummaries(siteIds: string[]): Promise<SiteRatingSummary[]> {
+  if (!supabase || siteIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('site_ratings')
+    .select('site_id, rating')
+    .eq('is_public', true)
+    .in('site_id', siteIds)
+    .limit(RATING_SUMMARY_LIMIT_SITES * 20);
+  if (error) throw error;
+
+  const bySite = new Map<string, number[]>();
+  for (const row of data ?? []) {
+    const list = bySite.get(row.site_id) ?? [];
+    list.push(row.rating);
+    bySite.set(row.site_id, list);
+  }
+  return Array.from(bySite.entries()).map(([siteId, ratings]) => ({
+    siteId,
+    average: ratings.reduce((a, b) => a + b, 0) / ratings.length,
+    count: ratings.length,
+  }));
 }

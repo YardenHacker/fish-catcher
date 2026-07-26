@@ -9,7 +9,7 @@ import { AreaBadge } from '@/components/area-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useSitesForRegion } from '@/lib/data';
+import { usePublicRatingSummaries, useSitesForRegion } from '@/lib/data';
 import { useActiveRegion } from '@/lib/region-context';
 
 // Sharm el Sheikh's default center/zoom, preserved exactly as-is for existing
@@ -43,7 +43,15 @@ const AREA_COLORS: Record<string, string> = {
 const DEFAULT_AREA_COLOR = '#6b7785';
 
 function buildMapHtml(
-  sites: { slug: string; name: string; lat: number; lng: number; area: string }[],
+  sites: {
+    slug: string;
+    name: string;
+    lat: number;
+    lng: number;
+    area: string;
+    averageRating?: number;
+    reviewCount?: number;
+  }[],
   userLocation: UserLocation,
   center: [number, number],
 ) {
@@ -74,6 +82,7 @@ function buildMapHtml(
         cursor: pointer;
       }
       .site-popup-title { font-family: sans-serif; font-weight: 700; margin: 0 0 4px 0; }
+      .site-popup-rating { font-family: sans-serif; font-size: 12px; color: #4d5c66; margin: 0 0 4px 0; }
       .site-marker-icon { background: transparent; border: none; }
       .area-legend {
         position: absolute;
@@ -143,13 +152,20 @@ function buildMapHtml(
         var title = document.createElement('p');
         title.className = 'site-popup-title';
         title.textContent = site.name;
+        popupNode.appendChild(title);
+        if (site.averageRating) {
+          var rating = document.createElement('div');
+          rating.className = 'site-popup-rating';
+          var rounded = Math.round(site.averageRating);
+          rating.textContent = '★'.repeat(rounded) + '☆'.repeat(5 - rounded) + ' ' + site.averageRating.toFixed(1) + ' (' + site.reviewCount + ')';
+          popupNode.appendChild(rating);
+        }
         var button = document.createElement('button');
         button.className = 'site-popup-link';
         button.textContent = 'View site';
         button.onclick = function () {
           window.ReactNativeWebView.postMessage(site.slug);
         };
-        popupNode.appendChild(title);
         popupNode.appendChild(button);
         marker.bindPopup(popupNode);
       });
@@ -187,6 +203,8 @@ function buildMapHtml(
 export default function MapScreen() {
   const activeRegion = useActiveRegion();
   const { data: sites, isLoading: sitesLoading } = useSitesForRegion(activeRegion?.slug);
+  const { data: ratingSummaries } = usePublicRatingSummaries(sites?.map((s) => s.id));
+  const ratingBySiteId = useMemo(() => new Map((ratingSummaries ?? []).map((r) => [r.siteId, r])), [ratingSummaries]);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [locationDenied, setLocationDenied] = useState(false);
 
@@ -222,7 +240,18 @@ export default function MapScreen() {
   }, []);
 
   const center = useMemo(() => computeMapCenter(sites ?? [], activeRegion?.slug), [sites, activeRegion?.slug]);
-  const html = useMemo(() => buildMapHtml(sites ?? [], userLocation, center), [sites, userLocation, center]);
+  const sitesWithRatings = useMemo(
+    () =>
+      (sites ?? []).map((site) => {
+        const summary = ratingBySiteId.get(site.id);
+        return { ...site, averageRating: summary?.average, reviewCount: summary?.count };
+      }),
+    [sites, ratingBySiteId],
+  );
+  const html = useMemo(
+    () => buildMapHtml(sitesWithRatings, userLocation, center),
+    [sitesWithRatings, userLocation, center],
+  );
 
   const handleMessage = (event: WebViewMessageEvent) => {
     const slug = event.nativeEvent.data;

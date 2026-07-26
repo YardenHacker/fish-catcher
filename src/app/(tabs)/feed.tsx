@@ -23,37 +23,20 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
+/** Fish finds only -- site ratings have their own aggregate display (SiteRatingSummary), not a feed entry. */
 function FeedRow({ event }: { event: ActivityEvent }) {
   const theme = useTheme();
 
-  if (event.kind === 'find') {
-    return (
-      <ThemedView type="backgroundElement" style={[styles.row, { borderColor: theme.border }]}>
-        <View style={[styles.dot, { backgroundColor: RARITY_TIER_COLOR[event.rarityTier] }]} />
-        <View style={styles.rowText}>
-          <ThemedText type="default">
-            <ThemedText type="smallBold">{event.displayName}</ThemedText> spotted a{' '}
-            <ThemedText type="smallBold" style={{ color: RARITY_TIER_COLOR[event.rarityTier] }}>
-              {event.rarityTier}
-            </ThemedText>{' '}
-            {event.speciesName} at {event.siteName}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {timeAgo(event.at)}
-          </ThemedText>
-        </View>
-      </ThemedView>
-    );
-  }
-
   return (
     <ThemedView type="backgroundElement" style={[styles.row, { borderColor: theme.border }]}>
-      <View style={[styles.dot, { backgroundColor: theme.accent }]} />
+      <View style={[styles.dot, { backgroundColor: RARITY_TIER_COLOR[event.rarityTier] }]} />
       <View style={styles.rowText}>
         <ThemedText type="default">
-          <ThemedText type="smallBold">{event.displayName}</ThemedText> rated {event.siteName}{' '}
-          {'★'.repeat(event.rating)}
-          {'☆'.repeat(5 - event.rating)}
+          <ThemedText type="smallBold">{event.displayName}</ThemedText> spotted a{' '}
+          <ThemedText type="smallBold" style={{ color: RARITY_TIER_COLOR[event.rarityTier] }}>
+            {event.rarityTier}
+          </ThemedText>{' '}
+          {event.speciesName} at {event.siteName}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {timeAgo(event.at)}
@@ -64,10 +47,11 @@ function FeedRow({ event }: { event: ActivityEvent }) {
 }
 
 /**
- * Recent public activity in the current area -- rare+ finds and site
- * ratings from users who've marked that specific review/find as public
- * (migration 0010). Scoped to whichever region is active, same as
- * Fish/Sites/Map; switching areas (via the Area tab) changes what shows here.
+ * Recent public rare+ fish finds in the current area -- deliberately
+ * fish-only, site ratings show as an aggregate average elsewhere (site
+ * detail, map) rather than as individual feed entries. Scoped to whichever
+ * region is active, same as Fish/Sites/Map; switching areas (via the Area
+ * tab) changes what shows here.
  */
 export default function FeedScreen() {
   const activeRegion = useActiveRegion();
@@ -94,9 +78,9 @@ export default function FeedScreen() {
             renderItem={({ item }) => <FeedRow event={item} />}
             ListEmptyComponent={
               <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
-                No public activity here yet. Rare+ finds and reviews marked Public show up here once
-                someone in this area logs one.{'\n\n'}
-                Want to be the first? Rate a site as Public from its{' '}
+                No rare+ finds here yet. A find shows up here once someone spots a Rare, Epic, or
+                Legendary species and has also made their rating of that same site Public.{'\n\n'}
+                Want to be the first? Log a sighting and rate the site as Public from its{' '}
                 <Link href="/sites" style={styles.link}>
                   detail page
                 </Link>

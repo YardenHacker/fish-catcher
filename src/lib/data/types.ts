@@ -137,12 +137,31 @@ export interface PublicReview {
 }
 
 /**
- * One entry in a region's activity feed -- a rare+ find or a public site
- * rating. A find only ever appears once the same user has also made their
- * rating of that same site public (see migration 0010's
- * sightings_read_if_site_rating_public policy) -- RLS is what actually
- * enforces this, not just this app's UI.
+ * One entry in a region's activity feed -- a rare+ fish find (site ratings
+ * are deliberately not part of this feed; see SiteRatingSummary for the
+ * aggregate rating shown on site/map screens instead). A find only ever
+ * appears once the same user has also made their rating of that same site
+ * public (see migration 0009's sightings_read_if_site_rating_public policy)
+ * -- RLS is what actually enforces this, not just this app's UI.
  */
-export type ActivityEvent =
-  | { kind: 'find'; id: string; displayName: string; speciesName: string; rarityTier: RarityTier; siteName: string; at: string }
-  | { kind: 'rating'; id: string; displayName: string; siteName: string; rating: number; at: string };
+export interface ActivityEvent {
+  kind: 'find';
+  id: string;
+  displayName: string;
+  speciesName: string;
+  rarityTier: RarityTier;
+  siteName: string;
+  at: string;
+}
+
+/**
+ * A site's aggregate public star rating (average + review count) -- a
+ * Google-Maps-style consensus number computed from every rating marked
+ * public, not just the current viewer's own. Absent entirely for a site
+ * with zero public ratings (not a zero-average entry).
+ */
+export interface SiteRatingSummary {
+  siteId: string;
+  average: number;
+  count: number;
+}
