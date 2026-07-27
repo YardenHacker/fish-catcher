@@ -53,7 +53,13 @@ export function TabButton({
 }: TabTriggerSlotProps & { icon?: IoniconName }) {
   const theme = useTheme();
   return (
-    <Pressable {...props} style={({ pressed }) => [styles.tabButton, pressed && styles.pressed]}>
+    <Pressable
+      {...props}
+      style={({ pressed }) => [
+        styles.tabButton,
+        { borderLeftColor: theme.border },
+        pressed && styles.pressed,
+      ]}>
       {icon && <Ionicons name={icon} size={20} color={isFocused ? theme.accent : theme.textSecondary} />}
       <ThemedText type="small" themeColor={isFocused ? 'accent' : 'textSecondary'} style={isFocused && styles.focusedLabel}>
         {children}
@@ -87,12 +93,15 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.one,
+    gap: Spacing.half,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     gap: Spacing.half,
     paddingVertical: Spacing.one,
+    borderLeftWidth: StyleSheet.hairlineWidth,
   },
   pressed: {
     opacity: 0.6,
